@@ -15,9 +15,14 @@ const port = process.env.PORT || 3000;
 app.use(express.json());
 app.use(cors());
 
-mongoose.connect("mongodb://localhost:27017/weynak")
-    .then(() => console.log("Connected to MongoDB"))
-    .catch(err => console.error("Database connection error:", err));
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000
+})
+.then(() => console.log("Connected to MongoDB"))
+.catch(err => console.error("Database connection error:", err));
+
 
 const transporter = nodemailer.createTransport({
     service: "gmail",
