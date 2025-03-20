@@ -32,6 +32,26 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS,
     },
 });
+function sendOTP(email, otp) {
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "رمز التحقق OTP",
+        text: رمز التحقق الخاص بك هو: ${otp}
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+            console.error("خطأ في إرسال البريد:", error);
+        } else {
+            console.log("تم إرسال OTP بنجاح:", info.response);
+        }
+    });
+}
+
+// تجربة إرسال OTP
+const generatedOTP = Math.floor(100000 + Math.random() * 900000); // توليد OTP عشوائي
+sendOTP("recipient@example.com", generatedOTP);
 
 const generateToken = (user) => {
     return jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: "1h" });
