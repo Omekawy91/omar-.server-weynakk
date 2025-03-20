@@ -49,9 +49,7 @@ function sendOTP(email, otp) {
     });
 }
 
-// تجربة إرسال OTP
-const generatedOTP = Math.floor(100000 + Math.random() * 900000); // توليد OTP عشوائي
-sendOTP("recipient@example.com", generatedOTP);
+
 
 const generateToken = (user) => {
     return jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: "1h" });
