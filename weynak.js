@@ -6,7 +6,7 @@ const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const asyncHandler = require("express-async-handler");
-const { User, Meeting, Participant, Movement, Notification, Contact } = require("./model"); // ضفت Contact هنا
+const { User, Meeting, Participant, Movement, Notification } = require("./model");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -32,7 +32,7 @@ const transporter = nodemailer.createTransport({
 });
 
 const generateToken = (user) => {
-    return jwt.sign({ id: user._id, name: user.name, email: user.email }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    return jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: "1h" });
 };
 
 const authenticateToken = (req, res, next) => {
@@ -50,19 +50,19 @@ const authenticateToken = (req, res, next) => {
 
 app.post("/register", asyncHandler(async (req, res) => {
     try {
-        const { name, email, phone, password } = req.body;
-        if (!name || !email || !phone || !password) return res.status(400).json({ message: "All fields are required!" });
+        const { name, email, password } = req.body;
+        if (!name || !email || !password) return res.status(400).json({ message: "All fields are required!" });
 
         const userExists = await User.findOne({ email });
         if (userExists) return res.status(400).json({ message: "Email already registered!" });
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = new User({ name, email, phone, password: hashedPassword });
+        const newUser = new User({ name, email, password: hashedPassword });
         await newUser.save();
 
         res.json({ message: "User registered successfully!" });
     } catch (error) {
-        res.json(error);
+        res.json(error)
     }
 }));
 
@@ -138,52 +138,24 @@ app.post("/logout", (req, res) => {
     res.json({ message: "Logged out successfully!" });
 });
 
-// مسارات جهات الاتصال
-app.post("/contacts", authenticateToken, asyncHandler(async (req, res) => {
-    const { name, phone, email } = req.body;
-    const userId = req.user.id; // استخدام الـ ID الخاص بالمستخدم
-
-    if (!name || !phone || !email) {
-        return res.status(400).json({ message: "All fields are required!" });
-    }
-
-    const newContact = new Contact({
-        name, phone, email, user_id: userId
-    });
-
-    await newContact.save();
-    res.status(201).json({ message: "Contact added successfully!", contact: newContact });
+app.post("/notifications", asyncHandler(async (req, res) => {
+    const notification = new Notification(req.body);
+    const saved = await notification.save();
+    res.status(201).json(saved);
 }));
 
-app.get("/contacts", authenticateToken, asyncHandler(async (req, res) => {
-    const userId = req.user.id;
-    const contacts = await Contact.find({ user_id: userId });
-    res.json(contacts);
+app.get("/notifications/:userId", asyncHandler(async (req, res) => {
+    const notifications = await Notification.find({ userId: req.params.userId });
+    res.json(notifications);
 }));
 
-app.put("/contacts/:id", authenticateToken, asyncHandler(async (req, res) => {
-    const contactId = req.params.id;
-    const { name, phone, email } = req.body;
-
-    const updatedContact = await Contact.findByIdAndUpdate(
-        contactId,
-        { name, phone, email },
+app.put("/notifications/:id", asyncHandler(async (req, res) => {
+    const updated = await Notification.findByIdAndUpdate(
+        req.params.id,
+        { status: req.body.status },
         { new: true }
     );
-
-    if (!updatedContact) return res.status(404).json({ message: "Contact not found!" });
-
-    res.json(updatedContact);
-}));
-
-app.delete("/contacts/:id", authenticateToken, asyncHandler(async (req, res) => {
-    const contactId = req.params.id;
-    const contact = await Contact.findById(contactId);
-
-    if (!contact) return res.status(404).json({ message: "Contact not found!" });
-
-    await contact.remove();
-    res.json({ message: "Contact deleted successfully!" });
+    res.json(updated);
 }));
 
 app.listen(port, () => {
@@ -198,6 +170,7 @@ app.on("error", (err) => {
         console.error("Server error:", err);
     }
 });
+
 
 
 
