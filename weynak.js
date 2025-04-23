@@ -6,7 +6,7 @@ const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const asyncHandler = require("express-async-handler");
-const { User, Meeting, Participant, Movement, Notification , contact } = require("./model");
+const { User, Meeting, Participant, Movement, Notification, Contact } = require("./model"); // ضفت Contact هنا
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -138,29 +138,52 @@ app.post("/logout", (req, res) => {
     res.json({ message: "Logged out successfully!" });
 });
 
-app.post("/notifications", asyncHandler(async (req, res) => {
-    const notification = new Notification(req.body);
-    const saved = await notification.save();
-    res.status(201).json(saved);
+// مسارات جهات الاتصال
+app.post("/contacts", authenticateToken, asyncHandler(async (req, res) => {
+    const { name, phone, email } = req.body;
+    const userId = req.user.id; // استخدام الـ ID الخاص بالمستخدم
+
+    if (!name || !phone || !email) {
+        return res.status(400).json({ message: "All fields are required!" });
+    }
+
+    const newContact = new Contact({
+        name, phone, email, user_id: userId
+    });
+
+    await newContact.save();
+    res.status(201).json({ message: "Contact added successfully!", contact: newContact });
 }));
 
-app.get("/notifications/:userId", authenticateToken, asyncHandler(async (req, res) => {
-    const notifications = await Notification.find({ user_id: req.params.userId });
-    res.json(notifications);
+app.get("/contacts", authenticateToken, asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const contacts = await Contact.find({ user_id: userId });
+    res.json(contacts);
 }));
 
-app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) => {
-    const updated = await Notification.findByIdAndUpdate(
-        req.params.id,
-        { read: req.body.read },
+app.put("/contacts/:id", authenticateToken, asyncHandler(async (req, res) => {
+    const contactId = req.params.id;
+    const { name, phone, email } = req.body;
+
+    const updatedContact = await Contact.findByIdAndUpdate(
+        contactId,
+        { name, phone, email },
         { new: true }
     );
-    res.json(updated);
+
+    if (!updatedContact) return res.status(404).json({ message: "Contact not found!" });
+
+    res.json(updatedContact);
 }));
 
-app.delete("/notifications/:id", authenticateToken, asyncHandler(async (req, res) => {
-    await Notification.findByIdAndDelete(req.params.id);
-    res.json({ message: "Notification deleted successfully!" });
+app.delete("/contacts/:id", authenticateToken, asyncHandler(async (req, res) => {
+    const contactId = req.params.id;
+    const contact = await Contact.findById(contactId);
+
+    if (!contact) return res.status(404).json({ message: "Contact not found!" });
+
+    await contact.remove();
+    res.json({ message: "Contact deleted successfully!" });
 }));
 
 app.listen(port, () => {
@@ -175,6 +198,7 @@ app.on("error", (err) => {
         console.error("Server error:", err);
     }
 });
+
 
 
 
