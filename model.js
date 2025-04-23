@@ -35,18 +35,25 @@ const movementSchema = new mongoose.Schema({
 movementSchema.index({ target_location: '2dsphere' });
 
 const notificationSchema = new mongoose.Schema({
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    meetingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', required: true },
+    user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    meeting_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', required: true },
     message: { type: String, required: true },
-    status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' },
-    timestamp: { type: Date, default: Date.now }
-});
+    read: { type: Boolean, default: false }
+}, { timestamps: true });
+
+const contactSchema = new mongoose.Schema({
+    user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    name: { type: String, required: true },
+    phone: { type: String, required: true }
+}, { timestamps: true });
 
 const User = mongoose.model('User', userSchema);
 const Meeting = mongoose.model('Meeting', meetingSchema);
 const Participant = mongoose.model('Participant', participantSchema);
 const Movement = mongoose.model('Movement', movementSchema);
 const Notification = mongoose.model('Notification', notificationSchema);
+const Contact = mongoose.model('Contact', contactSchema);
 
-module.exports = { User, Meeting, Participant, Movement, Notification };
+module.exports = { User, Meeting, Participant, Movement, Notification, Contact };
+
 
