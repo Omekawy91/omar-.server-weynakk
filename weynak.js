@@ -32,7 +32,7 @@ const transporter = nodemailer.createTransport({
 });
 
 const generateToken = (user) => {
-    return jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    return jwt.sign({ id: user._id, name: user.name, email: user.email }, process.env.JWT_SECRET, { expiresIn: "1h" });
 };
 
 const authenticateToken = (req, res, next) => {
@@ -50,19 +50,19 @@ const authenticateToken = (req, res, next) => {
 
 app.post("/register", asyncHandler(async (req, res) => {
     try {
-        const { name, email, password } = req.body;
-        if (!name || !email || !password) return res.status(400).json({ message: "All fields are required!" });
+        const { name, email, phone, password } = req.body;
+        if (!name || !email || !phone || !password) return res.status(400).json({ message: "All fields are required!" });
 
         const userExists = await User.findOne({ email });
         if (userExists) return res.status(400).json({ message: "Email already registered!" });
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = new User({ name, email, password: hashedPassword });
+        const newUser = new User({ name, email, phone, password: hashedPassword });
         await newUser.save();
 
         res.json({ message: "User registered successfully!" });
     } catch (error) {
-        res.json(error)
+        res.json(error);
     }
 }));
 
@@ -144,18 +144,23 @@ app.post("/notifications", asyncHandler(async (req, res) => {
     res.status(201).json(saved);
 }));
 
-app.get("/notifications/:userId", asyncHandler(async (req, res) => {
-    const notifications = await Notification.find({ userId: req.params.userId });
+app.get("/notifications/:userId", authenticateToken, asyncHandler(async (req, res) => {
+    const notifications = await Notification.find({ user_id: req.params.userId });
     res.json(notifications);
 }));
 
-app.put("/notifications/:id", asyncHandler(async (req, res) => {
+app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) => {
     const updated = await Notification.findByIdAndUpdate(
         req.params.id,
-        { status: req.body.status },
+        { read: req.body.read },
         { new: true }
     );
     res.json(updated);
+}));
+
+app.delete("/notifications/:id", authenticateToken, asyncHandler(async (req, res) => {
+    await Notification.findByIdAndDelete(req.params.id);
+    res.json({ message: "Notification deleted successfully!" });
 }));
 
 app.listen(port, () => {
@@ -170,6 +175,7 @@ app.on("error", (err) => {
         console.error("Server error:", err);
     }
 });
+
 
 
 
