@@ -6,8 +6,7 @@ const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const asyncHandler = require("express-async-handler");
-const { User, Meeting, Participant, Movement } = require("./model");
-;
+const { User, Meeting, Participant, Movement, Notification } = require("./model");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -23,7 +22,6 @@ mongoose.connect(process.env.MONGO_URI, {
 }).catch(err => {
     console.error("Database connection error:", err);
 });
-
 
 const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -51,36 +49,36 @@ const authenticateToken = (req, res, next) => {
 };
 
 app.post("/register", asyncHandler(async (req, res) => {
-    try{
+    try {
         const { name, email, password } = req.body;
         if (!name || !email || !password) return res.status(400).json({ message: "All fields are required!" });
-    
+
         const userExists = await User.findOne({ email });
         if (userExists) return res.status(400).json({ message: "Email already registered!" });
-    
+
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = new User({ name, email, password: hashedPassword });
         await newUser.save();
-    
+
         res.json({ message: "User registered successfully!" });
-    } catch(error){
-    res.json(error)
+    } catch (error) {
+        res.json(error)
     }
-    }));
-    app.post("/login", asyncHandler(async (req, res) => {
-        const { email, password } = req.body;
-        if (!email || !password) return res.status(400).json({ message: "All fields are required!" });
-    
-        const user = await User.findOne({ email: email.trim().toLowerCase() });
-        if (!user) return res.status(401).json({ message: "Invalid email or password" });
-    
-        const validPassword = await bcrypt.compare(password.trim(), user.password);
-        if (!validPassword) return res.status(401).json({ message: "Invalid email or password" });
-    
-        const token = generateToken(user);
-        res.json({ token });
-    }));
-    
+}));
+
+app.post("/login", asyncHandler(async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ message: "All fields are required!" });
+
+    const user = await User.findOne({ email: email.trim().toLowerCase() });
+    if (!user) return res.status(401).json({ message: "Invalid email or password" });
+
+    const validPassword = await bcrypt.compare(password.trim(), user.password);
+    if (!validPassword) return res.status(401).json({ message: "Invalid email or password" });
+
+    const token = generateToken(user);
+    res.json({ token });
+}));
 
 app.post("/forgot-password", asyncHandler(async (req, res) => {
     const { email } = req.body;
@@ -112,8 +110,6 @@ app.post("/forgot-password", asyncHandler(async (req, res) => {
     }
 }));
 
-
-
 app.post("/reset-password", asyncHandler(async (req, res) => {
     const { email, otp, newPassword } = req.body;
     if (!email || !otp || !newPassword) return res.status(400).json({ message: "All fields are required!" });
@@ -142,6 +138,26 @@ app.post("/logout", (req, res) => {
     res.json({ message: "Logged out successfully!" });
 });
 
+app.post("/notifications", asyncHandler(async (req, res) => {
+    const notification = new Notification(req.body);
+    const saved = await notification.save();
+    res.status(201).json(saved);
+}));
+
+app.get("/notifications/:userId", asyncHandler(async (req, res) => {
+    const notifications = await Notification.find({ userId: req.params.userId });
+    res.json(notifications);
+}));
+
+app.put("/notifications/:id", asyncHandler(async (req, res) => {
+    const updated = await Notification.findByIdAndUpdate(
+        req.params.id,
+        { status: req.body.status },
+        { new: true }
+    );
+    res.json(updated);
+}));
+
 app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
 });
@@ -154,5 +170,6 @@ app.on("error", (err) => {
         console.error("Server error:", err);
     }
 });
+
 
 
