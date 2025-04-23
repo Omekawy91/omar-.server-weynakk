@@ -6,7 +6,7 @@ const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const asyncHandler = require("express-async-handler");
-const { User, Meeting, Participant, Movement, Notification } = require("./model");
+const { User, Meeting, Participant, Movement, Notification , contact } = require("./model");
 
 const app = express();
 const port = process.env.PORT || 3000;
