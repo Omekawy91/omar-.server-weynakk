@@ -37,7 +37,7 @@ const generateToken = (user) => {
 };
 
 const authenticateToken = (req, res, next) => {
-  const token = req.header("Authorization");
+  const token = req.header("Authorization")?.split(" ")[1];
   if (!token) return res.status(401).json({ message: "Access Denied!" });
 
   try {
@@ -63,7 +63,7 @@ app.post("/register", asyncHandler(async (req, res) => {
 
     res.json({ message: "User registered successfully!" });
   } catch (error) {
-    res.json(error);
+    res.status(500).json({ message: "Server error!", error: error.message });
   }
 }));
 
@@ -98,7 +98,7 @@ app.post("/forgot-password", asyncHandler(async (req, res) => {
     from: process.env.EMAIL_USER,
     to: email,
     subject: "Password Reset Code",
-    text: Your password reset code is: ${otp},
+    text: `Your password reset code is: ${otp}`,
   };
 
   try {
@@ -115,8 +115,8 @@ app.post("/reset-password", asyncHandler(async (req, res) => {
   const { email, otp, newPassword } = req.body;
   if (!email || !otp || !newPassword) return res.status(400).json({ message: "All fields are required!" });
 
-  const user = await User.findOne({ email, otp });
-  if (!user) return res.status(400).json({ message: "Invalid OTP!" });
+  const user = await User.findOne({ email });
+  if (!user || user.otp !== otp) return res.status(400).json({ message: "Invalid OTP!" });
 
   if (user.otp_expires_at < Date.now()) {
     return res.status(400).json({ message: "OTP has expired!" });
@@ -139,18 +139,19 @@ app.post("/logout", (req, res) => {
   res.json({ message: "Logged out successfully!" });
 });
 
-app.post("/notifications", asyncHandler(async (req, res) => {
+// 🔐 محمية بالتوكن
+app.post("/notifications", authenticateToken, asyncHandler(async (req, res) => {
   const notification = new Notification(req.body);
   const saved = await notification.save();
   res.status(201).json(saved);
 }));
 
-app.get("/notifications/:userId", asyncHandler(async (req, res) => {
+app.get("/notifications/:userId", authenticateToken, asyncHandler(async (req, res) => {
   const notifications = await Notification.find({ userId: req.params.userId });
   res.json(notifications);
 }));
 
-app.put("/notifications/:id", asyncHandler(async (req, res) => {
+app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) => {
   const updated = await Notification.findByIdAndUpdate(
     req.params.id,
     { status: req.body.status },
@@ -160,17 +161,18 @@ app.put("/notifications/:id", asyncHandler(async (req, res) => {
 }));
 
 app.listen(port, () => {
-  console.log(Server running on http://localhost:${port});
+  console.log(`Server running on http://localhost:${port}`);
 });
 
 app.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
-    console.error(Port ${port} is already in use);
+    console.error(`Port ${port} is already in use`);
     process.exit(1);
   } else {
     console.error("Server error:", err);
   }
 });
+
 
 
 
