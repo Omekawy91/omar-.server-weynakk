@@ -2,11 +2,19 @@ const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
     name: { type: String, required: true },
-    email: { type: String, unique: true, required: true },
+    email: {
+        type: String,
+        unique: true,
+        required: true,
+        match: [/.+@.+\..+/, 'Please enter a valid email address']
+    },
+    phone: { type: String, required: true },
     password: { type: String, required: true },
     otp: { type: String, default: null },
     otp_expires_at: { type: Date, default: null }
 }, { timestamps: true });
+
+userSchema.index({ email: 1 });
 
 const meetingSchema = new mongoose.Schema({
     user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -21,6 +29,8 @@ const participantSchema = new mongoose.Schema({
     approved: { type: Boolean, default: false }
 }, { timestamps: true });
 
+participantSchema.index({ meeting_id: 1, user_id: 1 }, { unique: true });
+
 const movementSchema = new mongoose.Schema({
     user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     target_location: {
@@ -29,7 +39,11 @@ const movementSchema = new mongoose.Schema({
     },
     start_time: { type: Date, default: Date.now },
     end_time: { type: Date, default: null },
-    status: { type: String, default: 'قيد التنفيذ' }
+    status: {
+        type: String,
+        enum: ['قيد التنفيذ', 'مكتمل', 'ملغى'],
+        default: 'قيد التنفيذ'
+    }
 }, { timestamps: true });
 
 movementSchema.index({ target_location: '2dsphere' });
