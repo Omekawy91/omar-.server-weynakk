@@ -207,22 +207,14 @@ app.post("/meetings", asyncHandler(async (req, res) => {
   res.status(201).json(newMeeting);
 }));
 
-app.post("/meetings", asyncHandler(async (req, res) => {
-  const { meeting_name, meeting_datetime, location, members } = req.body;
-
-  const parsedMembers = typeof members === 'string' ? JSON.parse(members) : members;
-
-  const newMeeting = new Meeting({
-    meeting_name,
-    meeting_datetime,
-    location,
-    members: parsedMembers || []
-  });
-
-  await newMeeting.save();
-
-  res.status(201).json(newMeeting);
-}));
+router.get('/meetings', async (req, res) => {
+  try {
+    const meetings = await Meeting.find();
+    res.json(meetings);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 app.post("/meetings/:id/join", asyncHandler(async (req, res) => {
   const { name, phone } = req.body;
   const meeting = await Meeting.findById(req.params.id);
