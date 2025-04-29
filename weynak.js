@@ -206,6 +206,26 @@ app.get("/meetings/:id", asyncHandler(async (req, res) => {
   }
   res.json(meeting);
 }));
+app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
+  const { meeting_id } = req.body;
+  if (!meeting_id) return res.status(400).json({ message: "Meeting ID is required" });
+
+  const participantExists = await Participant.findOne({
+    meeting_id,
+    user_id: req.user.id
+  });
+
+  if (participantExists) return res.status(400).json({ message: "Already joined this meeting" });
+
+  const participant = new Participant({
+    meeting_id,
+    user_id: req.user.id,
+    approved: false
+  });
+
+  await participant.save();
+  res.status(201).json({ message: "Joined meeting successfully", participant });
+}));
 
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
