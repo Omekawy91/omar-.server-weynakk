@@ -37,12 +37,14 @@ const generateToken = (user) => {
 };
 
 const authenticateToken = (req, res, next) => {
-  const authHeader = req.header("Authorization");
-  const token = authHeader?.split(" ")[1];
+  const authHeader = req.headers['authorization'];
+  
+  if (!authHeader) {
+    console.log("Access Denied: No Authorization Header");
+    return res.status(401).json({ message: "Access Denied!" });
+  }
 
-  console.log("JWT_SECRET:", process.env.JWT_SECRET);
-  console.log("Authorization Header:", authHeader);
-  console.log("Token:", token);
+  const token = authHeader.split(' ')[1];
 
   if (!token) {
     console.log("Access Denied: No token provided");
@@ -56,7 +58,7 @@ const authenticateToken = (req, res, next) => {
     next();
   } catch (err) {
     console.log("Token verification failed:", err.message);
-    res.status(403).json({ message: "Invalid Token" });
+    return res.status(403).json({ message: "Invalid Token" });
   }
 };
 
