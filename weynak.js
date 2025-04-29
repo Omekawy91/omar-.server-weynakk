@@ -236,11 +236,15 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
 app.post('/movements', asyncHandler(async (req, res) => {
   const { user_id, coordinates } = req.body;
 
+  const coordsArray = Array.isArray(coordinates)
+    ? coordinates
+    : coordinates.split(',').map(Number);
+
   const newMovement = new Movement({
     user_id,
     target_location: {
       type: 'Point',
-      coordinates
+      coordinates: coordsArray
     },
     status: 'في الطريق'
   });
