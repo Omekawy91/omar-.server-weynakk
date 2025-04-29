@@ -207,7 +207,7 @@ app.post("/meetings", asyncHandler(async (req, res) => {
   res.status(201).json(newMeeting);
 }));
 
-router.get('/meetings', async (req, res) => {
+app.get('/meetings', async (req, res) => {
   try {
     const meetings = await Meeting.find();
     res.json(meetings);
@@ -215,6 +215,7 @@ router.get('/meetings', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
 app.post("/meetings/:id/join", asyncHandler(async (req, res) => {
   const { name, phone } = req.body;
   const meeting = await Meeting.findById(req.params.id);
