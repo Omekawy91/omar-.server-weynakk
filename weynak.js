@@ -37,13 +37,25 @@ const generateToken = (user) => {
 };
 
 const authenticateToken = (req, res, next) => {
-  const token = req.header("Authorization")?.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "Access Denied!" });
+  const authHeader = req.header("Authorization");
+  const token = authHeader?.split(" ")[1];
+
+  console.log("JWT_SECRET:", process.env.JWT_SECRET);
+  console.log("Authorization Header:", authHeader);
+  console.log("Token:", token);
+
+  if (!token) {
+    console.log("Access Denied: No token provided");
+    return res.status(401).json({ message: "Access Denied!" });
+  }
+
   try {
     const verified = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("Token Verified:", verified);
     req.user = verified;
     next();
   } catch (err) {
+    console.log("Token verification failed:", err.message);
     res.status(403).json({ message: "Invalid Token" });
   }
 };
