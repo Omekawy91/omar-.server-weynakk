@@ -233,6 +233,24 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
   res.status(201).json({ message: "Joined meeting successfully", participant });
 }));
 
+app.post('/movements', async (req, res) => {
+  try {
+    const { user_id, coordinates } = req.body;
+
+    const newMovement = new Movement({
+      user_id,
+      target_location: {
+        type: 'Point',
+        coordinates
+      },
+      status: 'في الطريق'
+    });
+
+    await newMovement.save();
+
+    res.status(201).json({ message: 'Movement created', movement: newMovement });
+}));
+
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
