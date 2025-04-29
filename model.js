@@ -1,45 +1,51 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    email: { type: String, unique: true, required: true },
-    password: { type: String, required: true },
-    otp: { type: String, default: null },
-    otp_expires_at: { type: Date, default: null }
+  name: { type: String, required: true },
+  email: { type: String, unique: true, required: true },
+  password: { type: String, required: true },
+  otp: { type: String, default: null },
+  otp_expires_at: { type: Date, default: null }
 }, { timestamps: true });
 
 const meetingSchema = new mongoose.Schema({
-    user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    meeting_name: { type: String, required: true },
-    meeting_datetime: { type: Date, required: true },
-    location: { type: String, default: null }
+  meeting_name: { type: String, required: true },
+  meeting_datetime: { type: Date, required: true },
+  location: { type: String, default: null },
+  members: [
+    {
+      name: String,
+      phone: String,
+      status: { type: String, enum: ['pending', 'confirmed', 'declined'], default: 'pending' }
+    }
+  ]
 }, { timestamps: true });
 
 const participantSchema = new mongoose.Schema({
-    meeting_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', required: true },
-    user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    approved: { type: Boolean, default: false }
+  meeting_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', required: true },
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  approved: { type: Boolean, default: false }
 }, { timestamps: true });
 
 const movementSchema = new mongoose.Schema({
-    user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    target_location: {
-        type: { type: String, enum: ['Point'], required: true, default: 'Point' },
-        coordinates: { type: [Number], required: true }
-    },
-    start_time: { type: Date, default: Date.now },
-    end_time: { type: Date, default: null },
-    status: { type: String, default: 'قيد التنفيذ' }
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  target_location: {
+    type: { type: String, enum: ['Point'], required: true, default: 'Point' },
+    coordinates: { type: [Number], required: true }
+  },
+  start_time: { type: Date, default: Date.now },
+  end_time: { type: Date, default: null },
+  status: { type: String, default: 'قيد التنفيذ' }
 }, { timestamps: true });
 
 movementSchema.index({ target_location: '2dsphere' });
 
 const notificationSchema = new mongoose.Schema({
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    meetingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', required: true },
-    message: { type: String, required: true },
-    status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' },
-    timestamp: { type: Date, default: Date.now }
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  meetingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', required: true },
+  message: { type: String, required: true },
+  status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' },
+  timestamp: { type: Date, default: Date.now }
 });
 
 const User = mongoose.model('User', userSchema);
