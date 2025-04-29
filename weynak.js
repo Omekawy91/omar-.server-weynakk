@@ -249,7 +249,7 @@ app.post('/movements', async (req, res) => {
     await newMovement.save();
 
     res.status(201).json({ message: 'Movement created', movement: newMovement });
-}));
+
 
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
