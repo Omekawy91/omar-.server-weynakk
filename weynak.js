@@ -157,11 +157,16 @@ app.post("/logout", (req, res) => {
   res.json({ message: "Logged out successfully!" });
 });
 
-app.post("/notifications", authenticateToken, asyncHandler(async (req, res) => {
-  const notification = new Notification(req.body);
-  const saved = await notification.save();
-  res.status(201).json(saved);
-}));
+app.post("/notifications", authenticateToken, async (req, res) => {
+  try {
+    const notification = new Notification(req.body);
+    const saved = await notification.save();
+    res.status(201).json(saved);
+  } catch (err) {
+    console.error("Error saving notification:", err);
+    res.status(500).json({ message: "Internal Server Error", error: err.message });
+  }
+});
 
 app.get("/notifications/:userId", authenticateToken, asyncHandler(async (req, res) => {
   const notifications = await Notification.find({ userId: req.params.userId });
