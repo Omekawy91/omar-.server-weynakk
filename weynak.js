@@ -189,11 +189,22 @@ app.post("/meetings", asyncHandler(async (req, res) => {
   res.status(201).json(newMeeting);
 }));
 
-app.get("/meetings", asyncHandler(async (req, res) => {
-  const meetings = await Meeting.find();
-  res.json(meetings);
-}));
+app.post("/meetings", asyncHandler(async (req, res) => {
+  const { meeting_name, meeting_datetime, location, members } = req.body;
 
+  const parsedMembers = typeof members === 'string' ? JSON.parse(members) : members;
+
+  const newMeeting = new Meeting({
+    meeting_name,
+    meeting_datetime,
+    location,
+    members: parsedMembers || []
+  });
+
+  await newMeeting.save();
+
+  res.status(201).json(newMeeting);
+}));
 app.post("/meetings/:id/join", asyncHandler(async (req, res) => {
   const { name, phone } = req.body;
   const meeting = await Meeting.findById(req.params.id);
