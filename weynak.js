@@ -175,7 +175,7 @@ app.post("/reset-password", asyncHandler(async (req, res) => {
   user.password = hashedPassword;
   user.otp = null;
   user.otp_expires_at = null;
-  user.isOtpVerified = false; الحالة بعد التغيير
+  user.isOtpVerified = false; 
 
   await user.save();
 
