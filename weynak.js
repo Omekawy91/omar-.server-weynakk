@@ -153,8 +153,9 @@ app.post("/verify-otp", asyncHandler(async (req, res) => {
 
 app.post("/reset-password", asyncHandler(async (req, res) => {
   const { email, newPassword, confirmPassword } = req.body;
+ 
+  if (!email || !newPassword || !confirmPassword) {
 
-  if (!email  !newPassword  !confirmPassword) {
     return res.status(400).json({ message: "All fields are required!" });
   }
 
