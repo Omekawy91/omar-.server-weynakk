@@ -145,16 +145,11 @@ app.post("/verify-otp", asyncHandler(async (req, res) => {
 
   res.json({ message: "OTP verified successfully!" });
 }));
+
 app.post("/reset-password", asyncHandler(async (req, res) => {
-  const { email, newPassword, confirmPassword } = req.body;
- 
-  if (!email || !newPassword || !confirmPassword) {
-
-    return res.status(400).json({ message: "All fields are required!" });
-  }
-
-  if (newPassword !== confirmPassword) {
-    return res.status(400).json({ message: "Passwords do not match!" });
+  const { email, newPassword } = req.body;
+  if (!email || !newPassword) {
+    return res.status(400).json({ message: "Email and new password are required!" });
   }
 
   const user = await User.findOne({ email });
@@ -162,20 +157,15 @@ app.post("/reset-password", asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "User not found!" });
   }
 
-  if (!user.isOtpVerified) {
-    return res.status(403).json({ message: "OTP verification required!" });
-  }
-
   const hashedPassword = await bcrypt.hash(newPassword, 10);
   user.password = hashedPassword;
   user.otp = null;
   user.otp_expires_at = null;
-  user.isOtpVerified = false;
-
   await user.save();
 
   res.json({ message: "Password reset successfully!" });
 }));
+
 
 
 app.get("/", (req, res) => {
