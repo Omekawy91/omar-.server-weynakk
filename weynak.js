@@ -130,7 +130,7 @@ app.post("/forgot-password", asyncHandler(async (req, res) => {
 }));
 app.post("/reset-password", asyncHandler(async (req, res) => {
   const { email, otp, newPassword } = req.body;
-  if (!email  !otp  !newPassword) return res.status(400).json({ message: "All fields are required!" });
+if (!email || !otp || !newPassword) return res.status(400).json({ message: "All fields are required!" });
   const user = await User.findOne({ email });
   if (!user || user.otp !== otp) return res.status(400).json({ message: "Invalid OTP!" });
   if (user.otp_expires_at < Date.now()) {
