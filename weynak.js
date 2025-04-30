@@ -128,41 +128,19 @@ app.post("/forgot-password", asyncHandler(async (req, res) => {
     res.status(500).json({ message: "Error sending email!", error: error.message });
   }
 }));
-app.post("/verify-otp", asyncHandler(async (req, res) => {
-  const { email, otp } = req.body;
-
-  const user = await User.findOne({ email });
-  if (!user) {
-    return res.status(404).json({ message: "User not found!" });
-  }
-
-  if (user.otp !== otp || user.otp_expires_at < Date.now()) {
-    return res.status(400).json({ message: "Invalid or expired OTP!" });
-  }
-
-  user.isOtpVerified = true;
-  await user.save();
-
-  res.json({ message: "OTP verified successfully!" });
-}));
-
 app.post("/reset-password", asyncHandler(async (req, res) => {
-  const { email, newPassword } = req.body;
-  if (!email || !newPassword) {
-    return res.status(400).json({ message: "Email and new password are required!" });
-  }
-
+  const { email, otp, newPassword } = req.body;
+  if (!email  !otp  !newPassword) return res.status(400).json({ message: "All fields are required!" });
   const user = await User.findOne({ email });
-  if (!user) {
-    return res.status(404).json({ message: "User not found!" });
+  if (!user || user.otp !== otp) return res.status(400).json({ message: "Invalid OTP!" });
+  if (user.otp_expires_at < Date.now()) {
+    return res.status(400).json({ message: "OTP has expired!" });
   }
-
   const hashedPassword = await bcrypt.hash(newPassword, 10);
   user.password = hashedPassword;
   user.otp = null;
   user.otp_expires_at = null;
   await user.save();
-
   res.json({ message: "Password reset successfully!" });
 }));
 
