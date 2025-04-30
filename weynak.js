@@ -129,28 +129,22 @@ app.post("/forgot-password", asyncHandler(async (req, res) => {
   }
 }));
 app.post("/verify-otp", asyncHandler(async (req, res) => {
-  const { otp } = req.body;
+  const { email, otp } = req.body;
 
-  if (!otp) {
-    return res.status(400).json({ message: "OTP is required!" });
-  }
-
-  const user = await User.findOne({ otp });
-
+  const user = await User.findOne({ email });
   if (!user) {
-    return res.status(400).json({ message: "Invalid OTP!" });
+    return res.status(404).json({ message: "User not found!" });
   }
 
-  if (user.otp_expires_at < Date.now()) {
-    return res.status(400).json({ message: "OTP has expired!" });
+  if (user.otp !== otp || user.otp_expires_at < Date.now()) {
+    return res.status(400).json({ message: "Invalid or expired OTP!" });
   }
 
   user.isOtpVerified = true;
   await user.save();
 
-  res.json({ message: "OTP verified successfully!", email: user.email });
+  res.json({ message: "OTP verified successfully!" });
 }));
-
 app.post("/reset-password", asyncHandler(async (req, res) => {
   const { email, newPassword, confirmPassword } = req.body;
  
