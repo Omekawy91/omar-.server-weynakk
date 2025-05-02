@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const meetingSchema = new mongoose.Schema({
-  name: { type: String, required: true },
+ meetingname: { type: String, required: true },
   date: { type: String, required: true },
   time: { type: String, required: true },
   members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
