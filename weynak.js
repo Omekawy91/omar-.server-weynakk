@@ -189,41 +189,52 @@ app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) =
   );
   res.json(updated);
 }));
+app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
+  const { name, date, time, members, isPublic } = req.body;
 
-app.post("/meetings", asyncHandler(async (req, res) => {
-  const { meeting_name, meeting_datetime, location, members } = req.body;
-  const newMeeting = new Meeting({ meeting_name, meeting_datetime, location, members: members || [] });
-  await newMeeting.save();
-  res.status(201).json(newMeeting);
-}));
+  const meeting = new Meeting({
+    name,
+    date,
+    time,
+    members,
+    createdBy: req.user.id,
+    isPublic
+  });
 
-app.get('/meetings', async (req, res) => {
-  try {
-    const meetings = await Meeting.find();
-    res.json(meetings);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.post("/meetings/:id/join", asyncHandler(async (req, res) => {
-  const { name, phone } = req.body;
-  const meeting = await Meeting.findById(req.params.id);
-  if (!meeting) {
-    return res.status(404).json({ message: "Meeting not found" });
-  }
-  meeting.members.push({ name, phone, status: "confirmed" });
   await meeting.save();
-  res.json(meeting);
+  res.status(201).json(meeting);
 }));
 
-app.get("/meetings/:id", asyncHandler(async (req, res) => {
-  const meeting = await Meeting.findById(req.params.id);
-  if (!meeting) {
-    return res.status(404).json({ message: "Meeting not found" });
-  }
-  res.json(meeting);
+app.get("/meetings/public", asyncHandler(async (req, res) => {
+  const meetings = await Meeting.find({ isPublic: true });
+  res.json(meetings);
 }));
+
+app.get("/meetings/user", authenticateToken, asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const meetings = await Meeting.find({
+    $or: [
+      { createdBy: userId },
+      { members: userId }
+    ]
+  });
+  res.json(meetings);
+}));
+
+app.patch("/meetings/:id/privacy", authenticateToken, asyncHandler(async (req, res) => {
+  const { isPublic } = req.body;
+
+  const meeting = await Meeting.findById(req.params.id);
+  if (!meeting) return res.status(404).json({ message: "Meeting not found" });
+  if (meeting.createdBy.toString() !== req.user.id) return res.status(403).json({ message: "Unauthorized" });
+
+  meeting.isPublic = isPublic;
+  await meeting.save();
+
+  res.json({ message: "Meeting privacy updated", meeting });
+}));
+
+
 app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
   const { meeting_id } = req.body;
   if (!meeting_id) return res.status(400).json({ message: "Meeting ID is required" });
