@@ -8,38 +8,14 @@ const userSchema = new mongoose.Schema({
   otp_expires_at: { type: Date, default: null }
 }, { timestamps: true });
 
-const mongoose = require("mongoose");
-
 const meetingSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true
-  },
-  date: {
-    type: String,
-    required: true
-  },
-  time: {
-    type: String,
-    required: true
-  },
-  members: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User"
-  }],
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true
-  },
-  isPublic: {
-    type: Boolean,
-    default: false
-  }
+  name: { type: String, required: true },
+  date: { type: String, required: true },
+  time: { type: String, required: true },
+  members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  isPublic: { type: Boolean, default: false }
 }, { timestamps: true });
-
-module.exports = mongoose.model("Meeting", meetingSchema);
-
 
 const participantSchema = new mongoose.Schema({
   meeting_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', required: true },
@@ -75,6 +51,7 @@ const Movement = mongoose.model('Movement', movementSchema);
 const Notification = mongoose.model('Notification', notificationSchema);
 
 module.exports = { User, Meeting, Participant, Movement, Notification };
+
 
 
 
