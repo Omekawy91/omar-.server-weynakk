@@ -8,18 +8,38 @@ const userSchema = new mongoose.Schema({
   otp_expires_at: { type: Date, default: null }
 }, { timestamps: true });
 
+const mongoose = require("mongoose");
+
 const meetingSchema = new mongoose.Schema({
-  meeting_name: { type: String, required: true },
-  meeting_datetime: { type: Date, required: true },
-  location: { type: String, default: null },
-  members: [
-    {
-      name: String,
-      phone: String,
-      status: { type: String, enum: ['pending', 'confirmed', 'declined'], default: 'pending' }
-    }
-  ]
+  name: {
+    type: String,
+    required: true
+  },
+  date: {
+    type: String,
+    required: true
+  },
+  time: {
+    type: String,
+    required: true
+  },
+  members: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User"
+  }],
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true
+  },
+  isPublic: {
+    type: Boolean,
+    default: false
+  }
 }, { timestamps: true });
+
+module.exports = mongoose.model("Meeting", meetingSchema);
+
 
 const participantSchema = new mongoose.Schema({
   meeting_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', required: true },
