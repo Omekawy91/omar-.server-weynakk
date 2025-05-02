@@ -190,16 +190,19 @@ app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) =
   res.json(updated);
 }));
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
-  const { name, date, time, members, isPublic } = req.body;
 
-  const meeting = new Meeting({
-    name,
-    date,
-    time,
-    members,
-    createdBy: req.user.id,
-    isPublic
-  });
+  const { name, date, time, members, isPublic, location } = req.body;
+
+const meeting = new Meeting({
+  name,
+  date,
+  time,
+  members,
+  createdBy: req.user.id,
+  isPublic,
+  location
+});
+
 
   await meeting.save();
   res.status(201).json(meeting);
