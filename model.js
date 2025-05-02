@@ -14,8 +14,23 @@ const meetingSchema = new mongoose.Schema({
   time: { type: String, required: true },
   members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  isPublic: { type: Boolean, default: false }
+  isPublic: { type: Boolean, default: false },
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      required: true
+    },
+    coordinates: {
+      type: [Number],
+      required: true
+    }
+  }
 }, { timestamps: true });
+
+meetingSchema.index({ location: '2dsphere' });
+
+module.exports = mongoose.model("Meeting", meetingSchema);
 
 const participantSchema = new mongoose.Schema({
   meeting_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', required: true },
