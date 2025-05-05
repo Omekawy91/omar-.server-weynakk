@@ -211,6 +211,8 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Location (lat, lng) is required" });
   }
 
+  console.log("Request user:", req.user); 
+
   const meeting = new Meeting({
     meetingname,
     date,
