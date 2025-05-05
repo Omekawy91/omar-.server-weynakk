@@ -204,27 +204,19 @@ app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) =
   );
   res.json(updated);
 }));
-app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
-  const { meetingname, date, time, phoneNumbers, email, isPublic, lat, lng } = req.body;
-
-  if (!lat || !lng) {
-    return res.status(400).json({ message: "Location (lat, lng) is required" });
+const meetingSchema = new mongoose.Schema({
+  meetingname: { type: String, required: true },
+  date: { type: String, required: true },
+  time: { type: String, required: true },
+  email: { type: String, required: true },
+  phoneNumbers: [{ type: String, required: true }],
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  isPublic: { type: Boolean, default: false },
+  location: {
+    lat: { type: Number, required: true },
+    lng: { type: Number, required: true }
   }
-
-  const meeting = new Meeting({
-    meetingname,
-    date,
-    time,
-    phoneNumbers,
-    email,
-    createdBy: req.user.id,
-    isPublic,
-    location: { lat, lng }
-  });
-
-  await meeting.save();
-  res.status(201).json(meeting);
-}));
+}, { timestamps: true });
 
 app.get("/meetings/public", asyncHandler(async (req, res) => {
   const meetings = await Meeting.find({ isPublic: true });
