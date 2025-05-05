@@ -64,8 +64,8 @@ const authenticateToken = (req, res, next) => {
 };
 
 app.post("/register", asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
-  if (!name || !email || !password) {
+  const { name, email, phoneNumber, password } = req.body;
+  if (!name || !email || !phoneNumber || !password) {
     return res.status(400).json({ message: "All fields are required!" });
   }
   const userExists = await User.findOne({ email });
@@ -73,44 +73,59 @@ app.post("/register", asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Email already registered!" });
   }
   const hashedPassword = await bcrypt.hash(password, 10);
-  const newUser = new User({ name, email, password: hashedPassword });
+  const newUser = new User({ name, email, phoneNumber, password: hashedPassword });
   await newUser.save();
   res.json({ message: "User registered successfully!" });
 }));
 
 app.post("/login", asyncHandler(async (req, res) => {
   const { email, password } = req.body;
+
   if (!email || !password) {
     return res.status(400).json({ message: "All fields are required!" });
   }
+
   const user = await User.findOne({ email: email.trim().toLowerCase() });
   if (!user) {
     return res.status(401).json({ message: "Invalid email or password" });
   }
+
   const validPassword = await bcrypt.compare(password.trim(), user.password);
   if (!validPassword) {
     return res.status(401).json({ message: "Invalid email or password" });
   }
+
   const token = generateToken(user);
-  res.json({ token });
+
+  res.status(200).json({
+    message: "Login successful",
+    token,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      phoneNumber: user.phoneNumber,
+    }
+  });
 }));
 
 app.post("/forgot-password", asyncHandler(async (req, res) => {
   const { email } = req.body;
+
   if (!email) {
     return res.status(400).json({ message: "Email is required!" });
   }
 
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const user = await User.findOneAndUpdate(
-    { email },
-    { otp, otp_expires_at: Date.now() + 15 * 60 * 1000 },
-    { new: true }
-  );
-
+  const user = await User.findOne({ email: email.trim().toLowerCase() });
   if (!user) {
     return res.status(404).json({ message: "Email not found!" });
   }
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  user.otp = otp;
+  user.otp_expires_at = Date.now() + 15 * 60 * 1000;
+  await user.save();
 
   const mailOptions = {
     from: process.env.EMAIL_USER,
@@ -120,23 +135,21 @@ app.post("/forgot-password", asyncHandler(async (req, res) => {
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent successfully:", info.response);
-    res.json({ message: "OTP sent successfully!" });
+    await transporter.sendMail(mailOptions);
+    res.status(200).json({ message: "OTP sent successfully!" });
   } catch (error) {
-    console.error("Error sending email:", error);
     res.status(500).json({ message: "Error sending email!", error: error.message });
   }
 }));
+
 app.post("/reset-password", asyncHandler(async (req, res) => {
- const { email, otp, newPassword } = req.body;
+  const { email, otp, newPassword } = req.body;
 
   if (!email || !otp || !newPassword) {
     return res.status(400).json({ message: "All fields are required!" });
   }
 
-  const user = await User.findOne({ email });
-
+  const user = await User.findOne({ email: email.trim().toLowerCase() });
   if (!user || user.otp !== otp) {
     return res.status(400).json({ message: "Invalid OTP!" });
   }
@@ -145,14 +158,16 @@ app.post("/reset-password", asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "OTP has expired!" });
   }
 
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
   user.password = hashedPassword;
   user.otp = null;
   user.otp_expires_at = null;
+
   await user.save();
 
-  res.json({ message: "Password reset successfully!" });
+  res.status(200).json({ message: "Password reset successfully!" });
 }));
+
 
 
 
@@ -190,19 +205,22 @@ app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) =
   res.json(updated);
 }));
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
+  const { meetingname, date, time, phoneNumbers, email, isPublic, lat, lng } = req.body;
 
-  const { meetingname, date, time, members, isPublic, location } = req.body;
+  if (!lat || !lng) {
+    return res.status(400).json({ message: "Location (lat, lng) is required" });
+  }
 
-const meeting = new Meeting({
-  meetingname,
-  date,
-  time,
-  members,
-  createdBy: req.user.id,
-  isPublic,
-  location
-});
-
+  const meeting = new Meeting({
+    meetingname,
+    date,
+    time,
+    phoneNumbers,
+    email,
+    createdBy: req.user.id,
+    isPublic,
+    location: { lat, lng }
+  });
 
   await meeting.save();
   res.status(201).json(meeting);
@@ -260,19 +278,18 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
 }));
 
 app.post('/movements', asyncHandler(async (req, res) => {
-  const { user_id, coordinates } = req.body;
+  const { user_id, lat, lng, phone, email } = req.body;
 
-  const coordsArray = Array.isArray(coordinates)
-    ? coordinates
-    : coordinates.split(',').map(Number);
+  if (!lat || !lng) {
+    return res.status(400).json({ message: "Latitude and longitude are required" });
+  }
 
   const newMovement = new Movement({
     user_id,
-    target_location: {
-      type: 'Point',
-      coordinates: coordsArray
-    },
-    status: 'في الطريق'
+    target_location: { lat, lng },
+    status: 'في الطريق',
+    phoneNumder,
+    email
   });
 
   await newMovement.save();
