@@ -204,28 +204,31 @@ app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) =
   );
   res.json(updated);
 }));
-const { meetingname, date, time, phoneNumbers, email, isPublic, lat, lng } = req.body;
+app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
+  const { meetingname, date, time, phoneNumbers, email, isPublic, lat, lng } = req.body;
 
-if (!lat || !lng) {
-  return res.status(400).json({ message: "Location (lat, lng) is required" });
-}
-
-const meeting = new Meeting({
-  meetingname,
-  date,
-  time,
-  phoneNumbers,  
-  email,
-  createdBy: req.user.id,
-  isPublic,
-  location: {
-    lat: Number(lat),
-    lng: Number(lng)
+  if (!lat || !lng) {
+    return res.status(400).json({ message: "Location (lat, lng) is required" });
   }
-});
 
-await meeting.save();
-res.status(201).json(meeting);
+  const meeting = new Meeting({
+    meetingname,
+    date,
+    time,
+    phoneNumbers,  
+    email,
+    createdBy: req.user.id,
+    isPublic,
+    location: {
+      lat: Number(lat),
+      lng: Number(lng)
+    }
+  });
+
+  await meeting.save();
+  res.status(201).json(meeting);
+}));
+
 
 app.get("/meetings/public", asyncHandler(async (req, res) => {
   const meetings = await Meeting.find({ isPublic: true });
