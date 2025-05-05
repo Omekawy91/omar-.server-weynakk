@@ -32,9 +32,9 @@ const participantSchema = new mongoose.Schema({
 const movementSchema = new mongoose.Schema({
   user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
    location: {
-      lat: Number(lat),
-      lng: Number(lng)
-    },
+    lat: { type: Number, required: true },
+    lng: { type: Number, required: true }
+  },
   start_time: { type: Date, default: Date.now },
   end_time: { type: Date, default: null },
   status: { type: String, default: 'قيد التنفيذ' }
