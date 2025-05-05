@@ -31,17 +31,17 @@ const participantSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const movementSchema = new mongoose.Schema({
+ const movementSchema = new mongoose.Schema({
   user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   target_location: {
-    type: { type: String, enum: ['Point'], required: true, default: 'Point' },
-    coordinates: { type: [Number], required: true }
+    lat: { type: Number, required: true },
+    lng: { type: Number, required: true }
   },
   start_time: { type: Date, default: Date.now },
   end_time: { type: Date, default: null },
   status: { type: String, default: 'قيد التنفيذ' }
 }, { timestamps: true });
 
-movementSchema.index({ target_location: '2dsphere' });
 
 const notificationSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
