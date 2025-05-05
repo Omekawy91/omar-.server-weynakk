@@ -3,34 +3,26 @@ const mongoose = require('mongoose');
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, unique: true, required: true },
+  phoneNumber: { type: String, required: true },
   password: { type: String, required: true },
   otp: { type: String, default: null },
   otp_expires_at: { type: Date, default: null }
 }, { timestamps: true });
 
 const meetingSchema = new mongoose.Schema({
- meetingname: { type: String, required: true },
+  meetingname: { type: String, required: true },
   date: { type: String, required: true },
   time: { type: String, required: true },
-  members: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  email: { type: String, required: true },
+  phoneNumber: { type: String, required: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   isPublic: { type: Boolean, default: false },
   location: {
-    type: {
-      type: String,
-      enum: ['Point'],
-      required: true
-    },
-    coordinates: {
-      type: [Number],
-      required: true
-    }
+    lat: { type: Number, required: true },
+    lng: { type: Number, required: true }
   }
 }, { timestamps: true });
 
-meetingSchema.index({ location: '2dsphere' });
-
-module.exports = mongoose.model("Meeting", meetingSchema);
 
 const participantSchema = new mongoose.Schema({
   meeting_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', required: true },
