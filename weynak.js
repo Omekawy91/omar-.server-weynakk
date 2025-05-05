@@ -64,8 +64,8 @@ const authenticateToken = (req, res, next) => {
 };
 
 app.post("/register", asyncHandler(async (req, res) => {
-  const { name, email, phoneNumber, password } = req.body;
-  if (!name || !email || !phoneNumber || !password) {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password) {
     return res.status(400).json({ message: "All fields are required!" });
   }
   const userExists = await User.findOne({ email });
@@ -73,7 +73,7 @@ app.post("/register", asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Email already registered!" });
   }
   const hashedPassword = await bcrypt.hash(password, 10);
-  const newUser = new User({ name, email, phoneNumber, password: hashedPassword });
+  const newUser = new User({ name, email, password: hashedPassword });
   await newUser.save();
   res.json({ message: "User registered successfully!" });
 }));
@@ -104,7 +104,7 @@ app.post("/login", asyncHandler(async (req, res) => {
       id: user._id,
       name: user.name,
       email: user.email,
-      phoneNumber: user.phoneNumber,
+     
     }
   });
 }));
