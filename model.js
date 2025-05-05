@@ -31,7 +31,6 @@ const participantSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const movementSchema = new mongoose.Schema({
- const movementSchema = new mongoose.Schema({
   user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   target_location: {
     lat: { type: Number, required: true },
