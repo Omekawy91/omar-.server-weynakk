@@ -283,12 +283,11 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
 
 const movementSchema = new mongoose.Schema({
   user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  target_location: {
-    lat: { type: Number, required: true },
-    lng: { type: Number, required: true }
-  },
-  phoneNumber: { type: String },
-  email: { type: String },       
+  location: {
+      lat: Number(lat),
+      lng: Number(lng)
+    },
+         
   start_time: { type: Date, default: Date.now },
   end_time: { type: Date, default: null },
   status: { type: String, default: 'قيد التنفيذ' }
