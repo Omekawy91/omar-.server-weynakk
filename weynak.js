@@ -281,17 +281,19 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
   res.status(201).json({ message: "Joined meeting successfully", participant });
 }));
 
-const movementSchema = new mongoose.Schema({
-  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  location: {
-      lat: Number(lat),
-      lng: Number(lng)
-    },
-         
-  start_time: { type: Date, default: Date.now },
-  end_time: { type: Date, default: null },
-  status: { type: String, default: 'قيد التنفيذ' }
-}, { timestamps: true });
+app.post("/movements", asyncHandler(async (req, res) => {
+  const { user_id, lat, lng } = req.body;
+
+  const movement = new Movement({
+    user_id,
+    location: { lat, lng },
+    status: "في الطريق"
+  });
+
+  await movement.save();
+  res.json(movement);
+}));
+
 
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
