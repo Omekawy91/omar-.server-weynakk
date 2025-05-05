@@ -8,13 +8,12 @@ const userSchema = new mongoose.Schema({
   otp: { type: String, default: null },
   otp_expires_at: { type: Date, default: null }
 }, { timestamps: true });
-
 const meetingSchema = new mongoose.Schema({
   meetingname: { type: String, required: true },
   date: { type: String, required: true },
   time: { type: String, required: true },
   email: { type: String, required: true },
-  phoneNumber: { type: String, required: true },
+  phoneNumbers: [{ type: String, required: true }],
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   isPublic: { type: Boolean, default: false },
   location: {
