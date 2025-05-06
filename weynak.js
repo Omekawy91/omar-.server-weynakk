@@ -260,7 +260,8 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
         const notification = new Notification({
           userId: user._id,
           title: "Meeting Invitation",
-          message: ${req.user.name} invited you to ${meeting.meetingname},
+        message: `${req.user.name} invited you to ${meeting.meetingname}`,
+
           meetingId: meeting._id,
           type: "invitation",
           status: "pending",
