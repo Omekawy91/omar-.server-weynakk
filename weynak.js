@@ -269,9 +269,13 @@ app.patch("/meetings/:id/privacy", authenticateToken, asyncHandler(async (req, r
   meeting.isPublic = isPublic;
   await meeting.save();
 
-  res.json({ message: "Meeting privacy updated", meeting });
+  res.json({ message: "Privacy updated", meeting });
 }));
 
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
 app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
   const { meeting_id } = req.body;
   if (!meeting_id) return res.status(400).json({ message: "Meeting ID is required" });
