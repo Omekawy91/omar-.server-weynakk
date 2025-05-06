@@ -39,44 +39,30 @@ const generateToken = (user) => {
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  
-  if (!authHeader) {
-    console.log("Access Denied: No Authorization Header");
-    return res.status(401).json({ message: "Access Denied!" });
-  }
-
+  if (!authHeader) return res.status(401).json({ message: "Access Denied!" });
   const token = authHeader.split(' ')[1];
-
-  if (!token) {
-    console.log("Access Denied: No token provided");
-    return res.status(401).json({ message: "Access Denied!" });
-  }
+  if (!token) return res.status(401).json({ message: "Access Denied!" });
 
   try {
     const verified = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("Token Verified:", verified);
     req.user = verified;
     next();
   } catch (err) {
-    console.log("Token verification failed:", err.message);
     return res.status(403).json({ message: "Invalid Token" });
   }
 };
 
 app.post("/register", asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
-
-  if (!name || !email || !password) {
+  const { name, email, password, phone } = req.body;
+  if (!name || !email || !password || !phone) {
     return res.status(400).json({ message: "All fields are required!" });
   }
 
-  const userExists = await User.findOne({ email });
-  if (userExists) {
-    return res.status(400).json({ message: "Email already registered!" });
-  }
+  const userExists = await User.findOne({ $or: [{ email }, { phone }] });
+  if (userExists) return res.status(400).json({ message: "Email or phone already registered!" });
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  const newUser = new User({ name, email, password: hashedPassword });
+  const newUser = new User({ name, email, password: hashedPassword, phone });
   await newUser.save();
 
   res.json({ message: "User registered successfully!" });
@@ -85,23 +71,15 @@ app.post("/register", asyncHandler(async (req, res) => {
 
 app.post("/login", asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ message: "All fields are required!" });
-  }
+  if (!email || !password) return res.status(400).json({ message: "All fields are required!" });
 
   const user = await User.findOne({ email: email.trim().toLowerCase() });
-  if (!user) {
-    return res.status(401).json({ message: "Invalid email or password" });
-  }
+  if (!user) return res.status(401).json({ message: "Invalid email or password" });
 
   const validPassword = await bcrypt.compare(password.trim(), user.password);
-  if (!validPassword) {
-    return res.status(401).json({ message: "Invalid email or password" });
-  }
+  if (!validPassword) return res.status(401).json({ message: "Invalid email or password" });
 
   const token = generateToken(user);
-
   res.status(200).json({
     message: "Login successful",
     token,
@@ -109,25 +87,19 @@ app.post("/login", asyncHandler(async (req, res) => {
       id: user._id,
       name: user.name,
       email: user.email,
-     
+      phone: user.phone,
     }
   });
 }));
 
 app.post("/forgot-password", asyncHandler(async (req, res) => {
   const { email } = req.body;
-
-  if (!email) {
-    return res.status(400).json({ message: "Email is required!" });
-  }
+  if (!email) return res.status(400).json({ message: "Email is required!" });
 
   const user = await User.findOne({ email: email.trim().toLowerCase() });
-  if (!user) {
-    return res.status(404).json({ message: "Email not found!" });
-  }
+  if (!user) return res.status(404).json({ message: "Email not found!" });
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
   user.otp = otp;
   user.otp_expires_at = Date.now() + 15 * 60 * 1000;
   await user.save();
@@ -136,7 +108,7 @@ app.post("/forgot-password", asyncHandler(async (req, res) => {
     from: process.env.EMAIL_USER,
     to: email,
     subject: "Password Reset Code",
-    text: `Your password reset code is: ${otp}`,
+    text: Your password reset code is: ${otp},
   };
 
   try {
@@ -149,33 +121,20 @@ app.post("/forgot-password", asyncHandler(async (req, res) => {
 
 app.post("/reset-password", asyncHandler(async (req, res) => {
   const { email, otp, newPassword } = req.body;
-
-  if (!email || !otp || !newPassword) {
-    return res.status(400).json({ message: "All fields are required!" });
-  }
+  if (!email || !otp || !newPassword) return res.status(400).json({ message: "All fields are required!" });
 
   const user = await User.findOne({ email: email.trim().toLowerCase() });
-  if (!user || user.otp !== otp) {
-    return res.status(400).json({ message: "Invalid OTP!" });
-  }
-
-  if (user.otp_expires_at < Date.now()) {
-    return res.status(400).json({ message: "OTP has expired!" });
-  }
+  if (!user || user.otp !== otp) return res.status(400).json({ message: "Invalid OTP!" });
+  if (user.otp_expires_at < Date.now()) return res.status(400).json({ message: "OTP has expired!" });
 
   const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
   user.password = hashedPassword;
   user.otp = null;
   user.otp_expires_at = null;
-
   await user.save();
 
   res.status(200).json({ message: "Password reset successfully!" });
 }));
-
-
-
-
 
 app.get("/", (req, res) => {
   res.send("welcome to sever ");
@@ -191,7 +150,6 @@ app.post("/notifications", authenticateToken, async (req, res) => {
     const saved = await notification.save();
     res.status(201).json(saved);
   } catch (err) {
-    console.error("Error saving notification:", err);
     res.status(500).json({ message: "Internal Server Error", error: err.message });
   }
 });
@@ -209,20 +167,50 @@ app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) =
   );
   res.json(updated);
 }));
-app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
-  const { meetingname, date, time, phoneNumbers, isPublic, lat, lng } = req.body;
 
-  if (!lat || !lng) {
-    return res.status(400).json({ message: "Location (lat, lng) is required" });
+app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, res) => {
+  const { notificationId, response } = req.body;
+
+  const notification = await Notification.findById(notificationId);
+  if (!notification || notification.userId.toString() !== req.user.id) {
+    return res.status(404).json({ message: "Notification not found or unauthorized" });
   }
 
-  console.log("Request user:", req.user); 
+  if (!["accepted", "rejected"].includes(response)) {
+    return res.status(400).json({ message: "Response must be either 'accepted' or 'rejected'" });
+  }
+
+  notification.status = response;
+  await notification.save();
+
+  if (response === "accepted") {
+    const alreadyJoined = await Participant.findOne({
+      meeting_id: notification.meetingId,
+      user_id: req.user.id
+    });
+
+    if (!alreadyJoined) {
+      const participant = new Participant({
+        meeting_id: notification.meetingId,
+        user_id: req.user.id,
+        approved: true
+      });
+      await participant.save();
+    }
+  }
+
+  res.status(200).json({ message: Invitation ${response}, notification });
+}));
+
+app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
+  const { meetingname, date, time, phoneNumbers, isPublic, lat, lng } = req.body;
+  if (!lat || !lng) return res.status(400).json({ message: "Location (lat, lng) is required" });
 
   const meeting = new Meeting({
     meetingname,
     date,
     time,
-    phoneNumbers,  
+    phoneNumbers,
     createdBy: req.user.id,
     isPublic,
     location: {
@@ -232,6 +220,23 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
   });
 
   await meeting.save();
+
+  if (phoneNumbers && phoneNumbers.length > 0) {
+    const invitedUsers = await User.find({ phone: { $in: phoneNumbers } });
+
+    for (const user of invitedUsers) {
+      const notification = new Notification({
+        userId: user._id,
+        title: "Meeting Invitation",
+        message: ${req.user.name} invited you to the meeting: ${meeting.meetingname},
+        meetingId: meeting._id,
+        type: "invitation",
+        status: "pending",
+      });
+      await notification.save();
+    }
+  }
+
   res.status(201).json(meeting);
 }));
 
@@ -258,7 +263,6 @@ app.patch("/meetings/:id/privacy", authenticateToken, asyncHandler(async (req, r
 
   res.json({ message: "Meeting privacy updated", meeting });
 }));
-
 
 app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
   const { meeting_id } = req.body;
@@ -294,23 +298,15 @@ app.post("/movements", asyncHandler(async (req, res) => {
   res.json(movement);
 }));
 
-
 const server = app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
+  console.log(Server running on http://localhost:${port});
 });
 
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
-    console.error(`Port ${port} is already in use`);
+    console.error(Port ${port} is already in use);
     process.exit(1);
   } else {
     console.error("Server error:", err);
   }
 });
-
-
-
-
-
-
-
