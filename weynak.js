@@ -247,23 +247,26 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
 
     await meeting.save({ session });
 
-    if (Array.isArray(phoneNumbers) && phoneNumbers.length > 0) {
-      const normalizedPhones = phoneNumbers.map(p => p.toString().trim());
-      const invitedUsers = await User.find({ phone: { $in: normalizedPhones } }).session(session);
+    if (phoneNumbers && phoneNumbers.length > 0) {
+      const phonesArray = Array.isArray(phoneNumbers) 
+        ? phoneNumbers 
+        : phoneNumbers.split(',').map(p => p.trim());
+      
+      const invitedUsers = await User.find({ 
+        phone: { $in: phonesArray } 
+      }).session(session);
 
-      const notificationPromises = invitedUsers.map(async (user) => {
+      await Promise.all(invitedUsers.map(async (user) => {
         const notification = new Notification({
           userId: user._id,
           title: "Meeting Invitation",
-          message: `${req.user.name} invited you to the meeting: ${meeting.meetingname}`,
+          message: ${req.user.name} invited you to ${meeting.meetingname},
           meetingId: meeting._id,
           type: "invitation",
           status: "pending",
         });
-        return notification.save({ session });
-      });
-
-      await Promise.all(notificationPromises);
+        await notification.save({ session });
+      }));
     }
 
     await session.commitTransaction();
@@ -271,13 +274,12 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
 
   } catch (error) {
     await session.abortTransaction();
+    console.error("Error creating meeting:", error);
     res.status(500).json({ message: "Failed to create meeting", error: error.message });
   } finally {
     session.endSession();
   }
 }));
-
-
 
 app.get("/meetings/user", authenticateToken, asyncHandler(async (req, res) => {
   const userId = req.user.id;
