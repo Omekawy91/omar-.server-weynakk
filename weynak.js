@@ -34,7 +34,11 @@ const transporter = nodemailer.createTransport({
 });
 
 const generateToken = (user) => {
-  return jwt.sign({ id: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: "1h" });
+  return jwt.sign(
+    { id: user._id, name: user.name, email: user.email },
+    process.env.JWT_SECRET,
+    { expiresIn: "1h" }
+  );
 };
 
 const authenticateToken = (req, res, next) => {
@@ -67,7 +71,6 @@ app.post("/register", asyncHandler(async (req, res) => {
 
   res.json({ message: "User registered successfully!" });
 }));
-
 
 app.post("/login", asyncHandler(async (req, res) => {
   const { email, password } = req.body;
@@ -108,7 +111,7 @@ app.post("/forgot-password", asyncHandler(async (req, res) => {
     from: process.env.EMAIL_USER,
     to: email,
     subject: "Password Reset Code",
-    text: Your password reset code is: ${otp},
+    text: `Your password reset code is: ${otp}`,
   };
 
   try {
@@ -199,7 +202,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
     }
   }
 
-  res.status(200).json({ message: Invitation ${response}, notification });
+  res.status(200).json({ message: `Invitation ${response}`, notification });
 }));
 
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
@@ -228,7 +231,7 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
       const notification = new Notification({
         userId: user._id,
         title: "Meeting Invitation",
-        message: ${req.user.name} invited you to the meeting: ${meeting.meetingname},
+        message: `${req.user.name} invited you to the meeting: ${meeting.meetingname}`,
         meetingId: meeting._id,
         type: "invitation",
         status: "pending",
@@ -299,12 +302,12 @@ app.post("/movements", asyncHandler(async (req, res) => {
 }));
 
 const server = app.listen(port, () => {
-  console.log(Server running on http://localhost:${port});
+  console.log(`Server running on http://localhost:${port}`);
 });
 
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
-    console.error(Port ${port} is already in use);
+    console.error(`Port ${port} is already in use`);
     process.exit(1);
   } else {
     console.error("Server error:", err);
