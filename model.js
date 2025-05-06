@@ -38,13 +38,14 @@ const movementSchema = new mongoose.Schema({
 });
 
 const notificationSchema = new mongoose.Schema({
-  userId: mongoose.Schema.Types.ObjectId,
-  title: String,
-  message: String,
-  meetingId: mongoose.Schema.Types.ObjectId,
-  type: String,
-  status: String
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  title: { type: String, required: true },
+  message: { type: String, required: true },
+  meetingId: { type: mongoose.Schema.Types.ObjectId, ref: "Meeting", required: true },
+  type: { type: String, enum: ["invitation", "reminder", "update"], required: true },
+  status: { type: String, enum: ["pending", "accepted", "rejected"], default: "pending" }
 });
+
 
 const User = mongoose.model("User", userSchema);
 const Meeting = mongoose.model("Meeting", meetingSchema);
