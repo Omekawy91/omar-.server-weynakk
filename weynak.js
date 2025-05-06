@@ -228,39 +228,54 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Location (lat, lng) is required" });
   }
 
-  const meeting = new Meeting({
-    meetingname,
-    date,
-    time,
-    phoneNumbers,
-    createdBy: req.user.id,
-    isPublic,
-    location: {
-      lat: Number(lat),
-      lng: Number(lng)
-    }
-  });
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  await meeting.save();
+  try {
+    const meeting = new Meeting({
+      meetingname,
+      date,
+      time,
+      phoneNumbers,
+      createdBy: req.user.id,
+      isPublic,
+      location: {
+        lat: Number(lat),
+        lng: Number(lng)
+      }
+    });
 
-  if (Array.isArray(phoneNumbers) && phoneNumbers.length > 0) {
-    const normalizedPhones = phoneNumbers.map(p => p.toString().trim());
-    const invitedUsers = await User.find({ phone: { $in: normalizedPhones } });
+    await meeting.save({ session });
 
-    for (const user of invitedUsers) {
-      const notification = new Notification({
-        userId: user._id,
-        title: "Meeting Invitation",
-        message: `${req.user.name} invited you to the meeting: ${meeting.meetingname}`,
-        meetingId: meeting._id,
-        type: "invitation",
-        status: "pending",
+    if (Array.isArray(phoneNumbers) && phoneNumbers.length > 0) {
+      const normalizedPhones = phoneNumbers.map(p => p.toString().trim());
+      const invitedUsers = await User.find({ phone: { $in: normalizedPhones } }).session(session);
+
+      const notificationPromises = invitedUsers.map(async (user) => {
+        const notification = new Notification({
+          userId: user._id,
+          title: "Meeting Invitation",
+          message: ${req.user.name} invited you to the meeting: ${meeting.meetingname},
+          meetingId: meeting._id,
+          type: "invitation",
+          status: "pending",
+        });
+        return notification.save({ session });
       });
-      await notification.save();
-    }
-  }
 
-  res.status(201).json(meeting);
+      await Promise.all(notificationPromises);
+    }
+
+    await session.commitTransaction();
+    res.status(201).json(meeting);
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("Error creating meeting:", error);
+    res.status(500).json({ message: "Failed to create meeting", error: error.message });
+  } finally {
+    session.endSession();
+  }
 }));
 
 
