@@ -156,7 +156,6 @@ app.post("/notifications", authenticateToken, async (req, res) => {
     res.status(500).json({ message: "Internal Server Error", error: err.message });
   }
 });
-
 app.get("/notifications/:userId", authenticateToken, asyncHandler(async (req, res) => {
   const notifications = await Notification.find({ userId: req.params.userId });
   res.json(notifications);
@@ -204,6 +203,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
 
   res.status(200).json({ message: `Invitation ${response}`, notification });
 }));
+
 
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingname, date, time, phoneNumbers, isPublic, lat, lng } = req.body;
