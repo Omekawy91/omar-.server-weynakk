@@ -148,14 +148,30 @@ app.post("/logout", (req, res) => {
 });
 
 app.post("/notifications", authenticateToken, async (req, res) => {
+  const { userId, title, message, meetingId, type, status } = req.body;
+
+  if (!userId || !title || !message || !meetingId || !type) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
   try {
-    const notification = new Notification(req.body);
+    const notification = new Notification({
+      userId,
+      title,
+      message,
+      meetingId,
+      type,
+      status: status || "pending"
+    });
+    
     const saved = await notification.save();
     res.status(201).json(saved);
   } catch (err) {
+    console.error("Error saving notification:", err);
     res.status(500).json({ message: "Internal Server Error", error: err.message });
   }
 });
+
 app.get("/notifications/:userId", authenticateToken, asyncHandler(async (req, res) => {
   const notifications = await Notification.find({ userId: req.params.userId });
   res.json(notifications);
