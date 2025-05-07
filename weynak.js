@@ -190,8 +190,15 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
   const { notificationId, response } = req.body;
 
   const notification = await Notification.findById(notificationId);
-  if (!notification || notification.userId.toString() !== req.user.id) {
-    return res.status(404).json({ message: "Notification not found or unauthorized" });
+  if (!notification) {
+    return res.status(404).json({ message: "Notification not found" });
+  }
+
+  console.log("Authenticated User ID:", req.user.id);
+  console.log("Notification User ID:", notification.userId.toString());
+
+  if (notification.userId.toString() !== req.user.id) {
+    return res.status(403).json({ message: "Unauthorized access to this notification" });
   }
 
   if (!["accepted", "rejected"].includes(response)) {
@@ -219,6 +226,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
 
   res.status(200).json({ message: `Invitation ${response}`, notification });
 }));
+
 
 
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
