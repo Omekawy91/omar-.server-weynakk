@@ -313,6 +313,9 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
 app.get("/meetings/:meetingId/vote-status", authenticateToken, asyncHandler(async (req, res) => {
   const meetingId = req.params.meetingId;
 
+  const meeting = await Meeting.findById(meetingId);
+  if (!meeting) return res.status(404).json({ message: "Meeting not found" });
+
   const notifications = await Notification.find({ meetingId });
 
   const accepted = notifications.filter(n => n.status === "accepted" && n.delayMinutes === 0);
@@ -324,6 +327,30 @@ app.get("/meetings/:meetingId/vote-status", authenticateToken, asyncHandler(asyn
     : accepted.length + delayed.length >= 3
     ? "Continue"
     : "Pending";
+  const existingStatusNotification = await Notification.findOne({
+    meetingId,
+    userId: meeting.createdBy,
+    type: "update",
+    title: "Meeting Voting Result"
+  });
+
+  const message = `Votes: Accepted (${accepted.length}), Delayed (${delayed.length}), Rejected (${rejected.length}). Suggested Action: ${suggestion}`;
+
+  if (existingStatusNotification) {
+    
+    existingStatusNotification.message = message;
+    existingStatusNotification.status = "pending";
+    await existingStatusNotification.save();
+  } else {
+    
+    await Notification.create({
+      userId: meeting.createdBy,
+      title: "Meeting Voting Result",
+      message,
+      meetingId,
+      type: "update"
+    });
+  }
 
   res.json({
     acceptedCount: accepted.length,
@@ -333,6 +360,7 @@ app.get("/meetings/:meetingId/vote-status", authenticateToken, asyncHandler(asyn
     suggestion
   });
 }));
+
 
 
 app.get("/meetings/user", authenticateToken, asyncHandler(async (req, res) => {
