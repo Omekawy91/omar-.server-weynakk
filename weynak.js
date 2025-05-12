@@ -216,26 +216,50 @@ app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) =
 }));
 
 app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, res) => {
-  const { notificationId, response } = req.body;
+  const { notificationId, response, delayMinutes = 0 } = req.body;
 
   const notification = await Notification.findById(notificationId);
-  if (!notification) return res.status(404).json({ message: "Notification not found" });
-  if (notification.userId.toString() !== req.user.id) return res.status(403).json({ message: "Unauthorized access to this notification" });
-  if (!["accepted", "rejected"].includes(response)) return res.status(400).json({ message: "Response must be either 'accepted' or 'rejected'" });
+  if (!notification || notification.userId.toString() !== req.user.id) {
+    return res.status(404).json({ message: "Notification not found or unauthorized" });
+  }
+
+  if (!["accepted", "rejected", "delayed"].includes(response)) {
+    return res.status(400).json({ message: "Invalid response" });
+  }
 
   notification.status = response;
+  notification.delayMinutes = response === "delayed" ? delayMinutes : 0;
   await notification.save();
 
   if (response === "accepted") {
-    const alreadyJoined = await Participant.findOne({ meeting_id: notification.meetingId, user_id: req.user.id });
+    const alreadyJoined = await Participant.findOne({
+      meeting_id: notification.meetingId,
+      user_id: req.user.id
+    });
+
     if (!alreadyJoined) {
-      const participant = new Participant({ meeting_id: notification.meetingId, user_id: req.user.id, approved: true });
+      const participant = new Participant({
+        meeting_id: notification.meetingId,
+        user_id: req.user.id,
+        approved: true
+      });
       await participant.save();
     }
   }
+  const allNotifications = await Notification.find({ meetingId: notification.meetingId });
+  const accepted = allNotifications.filter(n => n.status === "accepted").length;
+  const rejected = allNotifications.filter(n => n.status === "rejected").length;
+  const delayed = allNotifications.filter(n => n.status === "delayed");
 
-  res.status(200).json({ message: `Invitation ${response}`, notification });
+  res.status(200).json({
+    message: `Invitation ${response}`,
+    accepted,
+    rejected,
+    delayedCount: delayed.length,
+    delayedUsers: delayed.map(d => ({ userId: d.userId, delay: d.delayMinutes })),
+  });
 }));
+
 
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingname, date, time, phoneNumbers, isPublic, lat, lng } = req.body;
