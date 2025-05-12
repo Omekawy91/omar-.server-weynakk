@@ -214,7 +214,6 @@ app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) =
   );
   res.json(updated);
 }));
-
 app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, res) => {
   const { notificationId, response, delayMinutes = 0 } = req.body;
 
@@ -246,17 +245,50 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
       await participant.save();
     }
   }
+
   const allNotifications = await Notification.find({ meetingId: notification.meetingId });
-  const accepted = allNotifications.filter(n => n.status === "accepted").length;
-  const rejected = allNotifications.filter(n => n.status === "rejected").length;
-  const delayed = allNotifications.filter(n => n.status === "delayed");
+  const accepted = allNotifications.filter(n => n.status === "accepted" && n.delayMinutes === 0);
+  const delayed = allNotifications.filter(n => n.status === "accepted" && n.delayMinutes > 0);
+  const rejected = allNotifications.filter(n => n.status === "rejected");
+
+  const total = allNotifications.length;
+  const rejectionRate = (rejected.length / total) * 100;
+  const suggestion = rejectionRate >= 50
+    ? "Cancel"
+    : accepted.length + delayed.length >= 3
+    ? "Continue"
+    : "Pending";
+
+  const existingStatusNotification = await Notification.findOne({
+    meetingId: notification.meetingId,
+    userId: notification.createdBy,
+    type: "update",
+    title: "Meeting Voting Result"
+  });
+
+  const message = Votes: Accepted (${accepted.length}), Delayed (${delayed.length}), Rejected (${rejected.length}). Suggested Action: ${suggestion};
+
+  if (existingStatusNotification) {
+    existingStatusNotification.message = message;
+    existingStatusNotification.status = "pending";
+    await existingStatusNotification.save();
+  } else {
+    await Notification.create({
+      userId: (await Meeting.findById(notification.meetingId)).createdBy,
+      title: "Meeting Voting Result",
+      message,
+      meetingId: notification.meetingId,
+      type: "update"
+    });
+  }
 
   res.status(200).json({
-    message: `Invitation ${response}`,
-    accepted,
-    rejected,
+    message: Invitation ${response},
+    accepted: accepted.length,
+    rejected: rejected.length,
     delayedCount: delayed.length,
     delayedUsers: delayed.map(d => ({ userId: d.userId, delay: d.delayMinutes })),
+    suggestion
   });
 }));
 
