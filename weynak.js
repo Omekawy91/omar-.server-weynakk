@@ -1,5 +1,4 @@
 require("dotenv").config();
-console.log("JWT_SECRET from .env:", process.env.JWT_SECRET);
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
@@ -33,17 +32,26 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const generateToken = (user) => {
+const generateAccessToken = (user) => {
   return jwt.sign(
     { id: user._id, name: user.name, email: user.email },
     process.env.JWT_SECRET,
-    { expiresIn: "1h" }
+    { expiresIn: "15m" }
+  );
+};
+
+const generateRefreshToken = (user) => {
+  return jwt.sign(
+    { id: user._id, name: user.name, email: user.email },
+    process.env.REFRESH_SECRET,
+    { expiresIn: "7d" }
   );
 };
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   if (!authHeader) return res.status(401).json({ message: "Access Denied!" });
+
   const token = authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ message: "Access Denied!" });
 
@@ -52,9 +60,22 @@ const authenticateToken = (req, res, next) => {
     req.user = verified;
     next();
   } catch (err) {
-    return res.status(403).json({ message: "Invalid Token" });
+    return res.status(403).json({ message: "Unauthorized access" });
   }
 };
+
+app.post("/refresh-token", asyncHandler(async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(401).json({ message: "Refresh token is required" });
+
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.REFRESH_SECRET);
+    const newAccessToken = generateAccessToken(decoded);
+    res.status(200).json({ accessToken: newAccessToken });
+  } catch (err) {
+    res.status(403).json({ message: "Invalid refresh token" });
+  }
+}));
 
 app.post("/register", asyncHandler(async (req, res) => {
   const { name, email, password, phone } = req.body;
@@ -62,14 +83,19 @@ app.post("/register", asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "All fields are required!" });
   }
 
-  const userExists = await User.findOne({ $or: [{ email }, { phone }] });
+  const userExists = await User.findOne({ $or: [{ email: email.trim().toLowerCase() }, { phone: phone.trim() }] });
   if (userExists) return res.status(400).json({ message: "Email or phone already registered!" });
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const newUser = new User({ name, email, password: hashedPassword, phone });
-  await newUser.save();
+  const hashedPassword = await bcrypt.hash(password.trim(), 10);
+  const newUser = new User({
+    name: name.trim(),
+    email: email.trim().toLowerCase(),
+    password: hashedPassword,
+    phone: phone.trim()
+  });
 
-  res.json({ message: "User registered successfully!" });
+  await newUser.save();
+  res.status(201).json({ message: "User registered successfully" });
 }));
 
 app.post("/login", asyncHandler(async (req, res) => {
@@ -82,10 +108,13 @@ app.post("/login", asyncHandler(async (req, res) => {
   const validPassword = await bcrypt.compare(password.trim(), user.password);
   if (!validPassword) return res.status(401).json({ message: "Invalid email or password" });
 
-  const token = generateToken(user);
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
+
   res.status(200).json({
     message: "Login successful",
-    token,
+    accessToken,
+    refreshToken,
     user: {
       id: user._id,
       name: user.name,
@@ -167,7 +196,6 @@ app.post("/notifications", authenticateToken, async (req, res) => {
     const saved = await notification.save();
     res.status(201).json(saved);
   } catch (err) {
-    console.error("Error saving notification:", err);
     res.status(500).json({ message: "Internal Server Error", error: err.message });
   }
 });
@@ -190,36 +218,17 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
   const { notificationId, response } = req.body;
 
   const notification = await Notification.findById(notificationId);
-  if (!notification) {
-    return res.status(404).json({ message: "Notification not found" });
-  }
-
-  console.log("Authenticated User ID:", req.user.id);
-  console.log("Notification User ID:", notification.userId.toString());
-
-  if (notification.userId.toString() !== req.user.id) {
-    return res.status(403).json({ message: "Unauthorized access to this notification" });
-  }
-
-  if (!["accepted", "rejected"].includes(response)) {
-    return res.status(400).json({ message: "Response must be either 'accepted' or 'rejected'" });
-  }
+  if (!notification) return res.status(404).json({ message: "Notification not found" });
+  if (notification.userId.toString() !== req.user.id) return res.status(403).json({ message: "Unauthorized access to this notification" });
+  if (!["accepted", "rejected"].includes(response)) return res.status(400).json({ message: "Response must be either 'accepted' or 'rejected'" });
 
   notification.status = response;
   await notification.save();
 
   if (response === "accepted") {
-    const alreadyJoined = await Participant.findOne({
-      meeting_id: notification.meetingId,
-      user_id: req.user.id
-    });
-
+    const alreadyJoined = await Participant.findOne({ meeting_id: notification.meetingId, user_id: req.user.id });
     if (!alreadyJoined) {
-      const participant = new Participant({
-        meeting_id: notification.meetingId,
-        user_id: req.user.id,
-        approved: true
-      });
+      const participant = new Participant({ meeting_id: notification.meetingId, user_id: req.user.id, approved: true });
       await participant.save();
     }
   }
@@ -227,14 +236,10 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
   res.status(200).json({ message: `Invitation ${response}`, notification });
 }));
 
-
-
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingname, date, time, phoneNumbers, isPublic, lat, lng } = req.body;
 
-  if (!lat || !lng) {
-    return res.status(400).json({ message: "Location (lat, lng) is required" });
-  }
+  if (!lat || !lng) return res.status(400).json({ message: "Location (lat, lng) is required" });
 
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -247,32 +252,23 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
       phoneNumbers,
       createdBy: req.user.id,
       isPublic,
-      location: {
-        lat: Number(lat),
-        lng: Number(lng)
-      }
+      location: { lat: Number(lat), lng: Number(lng) }
     });
 
     await meeting.save({ session });
 
     if (phoneNumbers && phoneNumbers.length > 0) {
-      const phonesArray = Array.isArray(phoneNumbers) 
-        ? phoneNumbers 
-        : phoneNumbers.split(',').map(p => p.trim());
-      
-      const invitedUsers = await User.find({ 
-        phone: { $in: phonesArray } 
-      }).session(session);
+      const phonesArray = Array.isArray(phoneNumbers) ? phoneNumbers : phoneNumbers.split(',').map(p => p.trim());
+      const invitedUsers = await User.find({ phone: { $in: phonesArray } }).session(session);
 
       await Promise.all(invitedUsers.map(async (user) => {
         const notification = new Notification({
           userId: user._id,
           title: "Meeting Invitation",
-        message: `${req.user.name} invited you to ${meeting.meetingname}`,
-
+          message: `${req.user.name} invited you to ${meeting.meetingname}`,
           meetingId: meeting._id,
           type: "invitation",
-          status: "pending",
+          status: "pending"
         });
         await notification.save({ session });
       }));
@@ -283,7 +279,6 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
 
   } catch (error) {
     await session.abortTransaction();
-    console.error("Error creating meeting:", error);
     res.status(500).json({ message: "Failed to create meeting", error: error.message });
   } finally {
     session.endSession();
@@ -293,17 +288,13 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
 app.get("/meetings/user", authenticateToken, asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const meetings = await Meeting.find({
-    $or: [
-      { createdBy: userId },
-      { members: userId }
-    ]
+    $or: [ { createdBy: userId }, { members: userId } ]
   });
   res.json(meetings);
 }));
 
 app.patch("/meetings/:id/privacy", authenticateToken, asyncHandler(async (req, res) => {
   const { isPublic } = req.body;
-
   const meeting = await Meeting.findById(req.params.id);
   if (!meeting) return res.status(404).json({ message: "Meeting not found" });
   if (meeting.createdBy.toString() !== req.user.id) return res.status(403).json({ message: "Unauthorized" });
@@ -314,40 +305,21 @@ app.patch("/meetings/:id/privacy", authenticateToken, asyncHandler(async (req, r
   res.json({ message: "Privacy updated", meeting });
 }));
 
-
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
 app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
   const { meeting_id } = req.body;
   if (!meeting_id) return res.status(400).json({ message: "Meeting ID is required" });
 
-  const participantExists = await Participant.findOne({
-    meeting_id,
-    user_id: req.user.id
-  });
-
+  const participantExists = await Participant.findOne({ meeting_id, user_id: req.user.id });
   if (participantExists) return res.status(400).json({ message: "Already joined this meeting" });
 
-  const participant = new Participant({
-    meeting_id,
-    user_id: req.user.id,
-    approved: false
-  });
-
+  const participant = new Participant({ meeting_id, user_id: req.user.id, approved: false });
   await participant.save();
   res.status(201).json({ message: "Joined meeting successfully", participant });
 }));
 
 app.post("/movements", asyncHandler(async (req, res) => {
   const { user_id, lat, lng } = req.body;
-
-  const movement = new Movement({
-    user_id,
-    location: { lat, lng },
-    status: "في الطريق"
-  });
-
+  const movement = new Movement({ user_id, location: { lat, lng }, status: "في الطريق" });
   await movement.save();
   res.json(movement);
 }));
