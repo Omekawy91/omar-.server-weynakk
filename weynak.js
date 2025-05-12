@@ -218,7 +218,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
   const { notificationId, response, delayMinutes = 0 } = req.body;
 
   const notification = await Notification.findById(notificationId);
-  if (!notification || notification.userId.toString() !== req.user.id) {
+  if (!notification || !notification.userId.equals(req.user.id)) {
     return res.status(404).json({ message: "Notification not found or unauthorized" });
   }
 
@@ -226,16 +226,17 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
     return res.status(400).json({ message: "Invalid response" });
   }
 
-  notification.status = response;
-  notification.delayMinutes = (response === "delayed" || (response === "accepted" && delayMinutes > 0)) ? delayMinutes : 0;
-  await notification.save();
+  if (!notification.meetingId) {
+    return res.status(400).json({ message: "Notification is missing meetingId" });
+  }
 
-  await MeetingResponse.create({
-    meetingId: notification.meetingId,
-    userId: req.user.id,
-    response: response === "rejected" ? "rejected" : "accepted",
-    delayMinutes: (response === "delayed" || (response === "accepted" && delayMinutes > 0)) ? delayMinutes : 0
-  });
+  if (notification.status === response && (response !== "delayed" || notification.delayMinutes === delayMinutes)) {
+    return res.status(200).json({ message: "Already responded with same status" });
+  }
+
+  notification.status = response;
+  notification.delayMinutes = response === "delayed" ? delayMinutes : 0;
+  await notification.save();
 
   if (response === "accepted") {
     const alreadyJoined = await Participant.findOne({
@@ -254,50 +255,31 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
   }
 
   const allNotifications = await Notification.find({ meetingId: notification.meetingId });
-  const accepted = allNotifications.filter(n => n.status === "accepted" && n.delayMinutes === 0);
-  const delayed = allNotifications.filter(n => n.status === "accepted" && n.delayMinutes > 0);
-  const rejected = allNotifications.filter(n => n.status === "rejected");
+  const accepted = allNotifications.filter(n => n.status === "accepted").length;
+  const rejected = allNotifications.filter(n => n.status === "rejected").length;
+  const delayed = allNotifications.filter(n => n.status === "delayed");
 
-  const total = allNotifications.length;
-  const rejectionRate = (rejected.length / total) * 100;
-  const suggestion = rejectionRate >= 50
-    ? "Cancel"
-    : accepted.length + delayed.length >= 3
-    ? "Continue"
-    : "Pending";
-
-  const existingStatusNotification = await Notification.findOne({
-    meetingId: notification.meetingId,
-    userId: notification.createdBy,
-    type: "update",
-    title: "Meeting Voting Result"
-  });
-
-  const message = `Votes: Accepted (${accepted.length}), Delayed (${delayed.length}), Rejected (${rejected.length}). Suggested Action: ${suggestion}`;
-
-  if (existingStatusNotification) {
-    existingStatusNotification.message = message;
-    existingStatusNotification.status = "pending";
-    await existingStatusNotification.save();
-  } else {
-    await Notification.create({
-      userId: (await Meeting.findById(notification.meetingId)).createdBy,
-      title: "Meeting Voting Result",
-      message,
-      meetingId: notification.meetingId,
-      type: "update"
+  const meeting = await Meeting.findById(notification.meetingId);
+  if (meeting) {
+    const hostNotification = new Notification({
+      userId: meeting.created_by,
+      type: "response",
+      message: `${req.user.name} has ${response} the invitation.`,
+      meetingId: meeting._id,
+      status: "unread"
     });
+    await hostNotification.save();
   }
 
   res.status(200).json({
     message: `Invitation ${response}`,
-    accepted: accepted.length,
-    rejected: rejected.length,
+    accepted,
+    rejected,
     delayedCount: delayed.length,
     delayedUsers: delayed.map(d => ({ userId: d.userId, delay: d.delayMinutes })),
-    suggestion
   });
 }));
+
 
 
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
