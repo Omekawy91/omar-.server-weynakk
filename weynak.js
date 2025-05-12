@@ -310,6 +310,31 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
   }
 }));
 
+app.get("/meetings/:meetingId/vote-status", authenticateToken, asyncHandler(async (req, res) => {
+  const meetingId = req.params.meetingId;
+
+  const notifications = await Notification.find({ meetingId });
+
+  const accepted = notifications.filter(n => n.status === "accepted" && n.delayMinutes === 0);
+  const delayed = notifications.filter(n => n.status === "accepted" && n.delayMinutes > 0);
+  const rejected = notifications.filter(n => n.status === "rejected");
+
+  const suggestion = rejected.length >= 3
+    ? "Cancel"
+    : accepted.length + delayed.length >= 3
+    ? "Continue"
+    : "Pending";
+
+  res.json({
+    acceptedCount: accepted.length,
+    delayedCount: delayed.length,
+    rejectedCount: rejected.length,
+    totalVotes: notifications.length,
+    suggestion
+  });
+}));
+
+
 app.get("/meetings/user", authenticateToken, asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const meetings = await Meeting.find({
