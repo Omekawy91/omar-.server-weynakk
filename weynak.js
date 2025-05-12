@@ -140,7 +140,8 @@ app.post("/forgot-password", asyncHandler(async (req, res) => {
     from: process.env.EMAIL_USER,
     to: email,
     subject: "Password Reset Code",
-    text: Your password reset code is: ${otp}
+   text: `Your password reset code is: ${otp}`
+
   };
 
   try {
