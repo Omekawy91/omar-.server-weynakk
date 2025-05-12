@@ -140,8 +140,7 @@ app.post("/forgot-password", asyncHandler(async (req, res) => {
     from: process.env.EMAIL_USER,
     to: email,
     subject: "Password Reset Code",
-   text: `Your password reset code is: ${otp}`
-
+    text: `Your password reset code is: ${otp}`
   };
 
   try {
@@ -214,6 +213,7 @@ app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) =
   );
   res.json(updated);
 }));
+
 app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, res) => {
   const { notificationId, response, delayMinutes = 0 } = req.body;
 
@@ -266,7 +266,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
     title: "Meeting Voting Result"
   });
 
-  const message = Votes: Accepted (${accepted.length}), Delayed (${delayed.length}), Rejected (${rejected.length}). Suggested Action: ${suggestion};
+  const message = `Votes: Accepted (${accepted.length}), Delayed (${delayed.length}), Rejected (${rejected.length}). Suggested Action: ${suggestion}`;
 
   if (existingStatusNotification) {
     existingStatusNotification.message = message;
@@ -283,7 +283,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
   }
 
   res.status(200).json({
-    message: Invitation ${response},
+    message: `Invitation ${response}`,
     accepted: accepted.length,
     rejected: rejected.length,
     delayedCount: delayed.length,
@@ -291,7 +291,6 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
     suggestion
   });
 }));
-
 
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingname, date, time, phoneNumbers, isPublic, lat, lng } = req.body;
@@ -359,6 +358,7 @@ app.get("/meetings/:meetingId/vote-status", authenticateToken, asyncHandler(asyn
     : accepted.length + delayed.length >= 3
     ? "Continue"
     : "Pending";
+
   const existingStatusNotification = await Notification.findOne({
     meetingId,
     userId: meeting.createdBy,
@@ -369,12 +369,10 @@ app.get("/meetings/:meetingId/vote-status", authenticateToken, asyncHandler(asyn
   const message = `Votes: Accepted (${accepted.length}), Delayed (${delayed.length}), Rejected (${rejected.length}). Suggested Action: ${suggestion}`;
 
   if (existingStatusNotification) {
-    
     existingStatusNotification.message = message;
     existingStatusNotification.status = "pending";
     await existingStatusNotification.save();
   } else {
-    
     await Notification.create({
       userId: meeting.createdBy,
       title: "Meeting Voting Result",
@@ -392,8 +390,6 @@ app.get("/meetings/:meetingId/vote-status", authenticateToken, asyncHandler(asyn
     suggestion
   });
 }));
-
-
 
 app.get("/meetings/user", authenticateToken, asyncHandler(async (req, res) => {
   const userId = req.user.id;
