@@ -227,8 +227,15 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
   }
 
   notification.status = response;
-  notification.delayMinutes = response === "delayed" ? delayMinutes : 0;
+  notification.delayMinutes = (response === "delayed" || (response === "accepted" && delayMinutes > 0)) ? delayMinutes : 0;
   await notification.save();
+
+  await MeetingResponse.create({
+    meetingId: notification.meetingId,
+    userId: req.user.id,
+    response: response === "rejected" ? "rejected" : "accepted",
+    delayMinutes: (response === "delayed" || (response === "accepted" && delayMinutes > 0)) ? delayMinutes : 0
+  });
 
   if (response === "accepted") {
     const alreadyJoined = await Participant.findOne({
@@ -291,6 +298,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
     suggestion
   });
 }));
+
 
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingname, date, time, phoneNumbers, isPublic, lat, lng } = req.body;
