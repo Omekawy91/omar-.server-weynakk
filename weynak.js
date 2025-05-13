@@ -234,7 +234,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
     notification.status = response;
     await notification.save();
 
-    // إضافة المشارك لو قبل الدعوة
+    // Add participant if accepted
     if (response === "accepted") {
       const alreadyJoined = await Participant.findOne({
         meeting_id: notification.meetingId,
@@ -250,11 +250,11 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
       }
     }
 
-    // إشعار لصاحب الميتنج
+    // Notify meeting creator
     const meeting = await Meeting.findById(notification.meetingId);
-    if (meeting) {
+    if (meeting && meeting.createdBy) { // Check if meeting and createdBy exist
       await Notification.create({
-        userId: meeting.created_by,
+        userId: meeting.createdBy, // Make sure this matches your schema
         title: "Meeting Response",
         message: `${req.user.name} has ${response} the invitation.`,
         meetingId: meeting._id,
@@ -263,14 +263,13 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
       });
     }
 
-    // حساب النسبة
+    // Calculate response ratios
     const allNotifications = await Notification.find({ meetingId: notification.meetingId });
     const accepted = allNotifications.filter(n => n.status === "accepted").length;
     const rejected = allNotifications.filter(n => n.status === "rejected").length;
     const total = allNotifications.length;
 
-    // لو أكتر من 50% رفضوا
-    if (rejected / total > 0.5 && meeting) {
+    if (rejected / total > 0.5 && meeting && meeting.createdBy) {
       await Notification.create({
         userId: meeting.createdBy,
         title: "Too Many Rejections",
@@ -291,7 +290,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
     console.error("Error in /notifications/respond:", error);
     res.status(500).json({
       message: "Server error",
-      error: error.message // عشان يوضحلك الخطأ
+      error: error.message
     });
   }
 }));
