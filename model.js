@@ -14,7 +14,7 @@ const meetingSchema = new mongoose.Schema({
   date: String,
   time: String,
   phoneNumbers: [String],
-  createdBy: mongoose.Schema.Types.ObjectId,
+  created_by: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   isPublic: Boolean,
   location: {
     lat: Number,
@@ -42,16 +42,8 @@ const notificationSchema = new mongoose.Schema({
   title: { type: String, required: true },
   message: { type: String, required: true },
   meetingId: { type: mongoose.Schema.Types.ObjectId, ref: "Meeting", required: true },
-  type: {
-    type: String,
-    enum: ["invitation", "reminder", "update", "response"], 
-    required: true
-  },
-  status: {
-    type: String,
-    enum: ["pending", "accepted", "rejected", "delayed", "unread"], 
-    default: "pending"
-  },
+  type: { type: String, enum: ["invitation", "reminder", "update", "response"], required: true },
+  status: { type: String, enum: ["pending", "accepted", "rejected", "delayed", "unread"], default: "pending" },
   delayMinutes: { type: Number, default: 0 }
 });
 
@@ -59,7 +51,7 @@ const meetingResponseSchema = new mongoose.Schema({
   meetingId: { type: mongoose.Schema.Types.ObjectId, ref: "Meeting" },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   response: { type: String, enum: ["accepted", "rejected"], required: true },
-  delayMinutes: { type: Number, default: 0 },
+  delayMinutes: { type: Number, default: 0 }
 }, { timestamps: true });
 
 const User = mongoose.model("User", userSchema);
