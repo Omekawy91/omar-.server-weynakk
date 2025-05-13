@@ -218,26 +218,23 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
   try {
     const { notificationId, response } = req.body;
 
-    if (!["accepted", "rejected"].includes(response)) {
-      return res.status(400).json({ message: "Invalid response" });
-    }
-
     const notification = await Notification.findById(notificationId);
     if (!notification || !notification.userId.equals(req.user.id)) {
       return res.status(404).json({ message: "Notification not found or unauthorized" });
+    }
+
+    if (!["accepted", "rejected"].includes(response)) {
+      return res.status(400).json({ message: "Invalid response" });
     }
 
     if (!notification.meetingId) {
       return res.status(400).json({ message: "Notification is missing meetingId" });
     }
 
-    if (notification.status === response) {
-      return res.status(200).json({ message: "Already responded with same status" });
-    }
-
     notification.status = response;
     await notification.save();
 
+    // إضافة المشارك لو قبل الدعوة
     if (response === "accepted") {
       const alreadyJoined = await Participant.findOne({
         meeting_id: notification.meetingId,
@@ -245,40 +242,43 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
       });
 
       if (!alreadyJoined) {
-        const participant = new Participant({
+        await Participant.create({
           meeting_id: notification.meetingId,
           user_id: req.user.id,
           approved: true
         });
-        await participant.save();
       }
     }
 
-    const allNotifications = await Notification.find({ meetingId: notification.meetingId });
-    const accepted = allNotifications.filter(n => n.status === "accepted").length;
-    const rejected = allNotifications.filter(n => n.status === "rejected").length;
-    const totalResponses = accepted + rejected;
-
+    // إشعار لصاحب الميتنج
     const meeting = await Meeting.findById(notification.meetingId);
-
     if (meeting) {
       await Notification.create({
         userId: meeting.created_by,
-        type: "response",
+        title: "Meeting Response",
         message: `${req.user.name} has ${response} the invitation.`,
         meetingId: meeting._id,
+        type: "response",
         status: "unread"
       });
+    }
 
-      if (totalResponses >= 2 && rejected / totalResponses >= 0.5) {
-        await Notification.create({
-          userId: meeting.created_by,
-          type: "warning",
-          message: `More than 50% of invitees rejected the meeting. Do you want to continue or cancel it?`,
-          meetingId: meeting._id,
-          status: "unread"
-        });
-      }
+    // حساب النسبة
+    const allNotifications = await Notification.find({ meetingId: notification.meetingId });
+    const accepted = allNotifications.filter(n => n.status === "accepted").length;
+    const rejected = allNotifications.filter(n => n.status === "rejected").length;
+    const total = allNotifications.length;
+
+    // لو أكتر من 50% رفضوا
+    if (rejected / total > 0.5 && meeting) {
+      await Notification.create({
+        userId: meeting.created_by,
+        title: "Too Many Rejections",
+        message: `More than 50% of invitees rejected the meeting.`,
+        meetingId: meeting._id,
+        type: "update",
+        status: "pending"
+      });
     }
 
     res.status(200).json({
@@ -287,11 +287,15 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
       rejected
     });
 
-  } catch (err) {
-    console.error("Error in /notifications/respond:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+  } catch (error) {
+    console.error("Error in /notifications/respond:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message // عشان يوضحلك الخطأ
+    });
   }
 }));
+
 
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingname, date, time, phoneNumbers, isPublic, lat, lng } = req.body;
