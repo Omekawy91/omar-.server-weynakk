@@ -304,13 +304,13 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
-  try {
+try {
     const meeting = new Meeting({
       meetingname,
       date,
       time,
       phoneNumbers,
-      createdBy: req.user.id,
+      createdby: req.user.id,  
       isPublic,
       location: { lat: Number(lat), lng: Number(lng) }
     });
