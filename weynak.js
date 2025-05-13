@@ -310,7 +310,7 @@ try {
       date,
       time,
       phoneNumbers,
-      createdby: req.user.id,  
+      createdBy: req.user.id,  
       isPublic,
       location: { lat: Number(lat), lng: Number(lng) }
     });
