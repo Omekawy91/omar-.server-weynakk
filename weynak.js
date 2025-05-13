@@ -215,29 +215,34 @@ app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) =
 }));
 
 app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, res) => {
-  const { notificationId, response, delayMinutes = 0 } = req.body;
+  const { notificationId, response } = req.body;
 
+  // تحقق من صلاحية الرد
+  if (!["accepted", "rejected"].includes(response)) {
+    return res.status(400).json({ message: "Invalid response" });
+  }
+
+  // جلب الإشعار
   const notification = await Notification.findById(notificationId);
   if (!notification || !notification.userId.equals(req.user.id)) {
     return res.status(404).json({ message: "Notification not found or unauthorized" });
   }
 
-  if (!["accepted", "rejected", "delayed"].includes(response)) {
-    return res.status(400).json({ message: "Invalid response" });
-  }
-
+  // التحقق من وجود اجتماع مرتبط
   if (!notification.meetingId) {
     return res.status(400).json({ message: "Notification is missing meetingId" });
   }
 
-  if (notification.status === response && (response !== "delayed" || notification.delayMinutes === delayMinutes)) {
+  // التحقق من التكرار
+  if (notification.status === response) {
     return res.status(200).json({ message: "Already responded with same status" });
   }
 
+  // تحديث حالة الإشعار
   notification.status = response;
-  notification.delayMinutes = response === "delayed" ? delayMinutes : 0;
   await notification.save();
 
+  // لو المستخدم وافق، ضيفه كـ Participant
   if (response === "accepted") {
     const alreadyJoined = await Participant.findOne({
       meeting_id: notification.meetingId,
@@ -254,31 +259,43 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
     }
   }
 
+  // حساب الردود الكاملة
   const allNotifications = await Notification.find({ meetingId: notification.meetingId });
   const accepted = allNotifications.filter(n => n.status === "accepted").length;
   const rejected = allNotifications.filter(n => n.status === "rejected").length;
-  const delayed = allNotifications.filter(n => n.status === "delayed");
+  const totalResponses = accepted + rejected;
 
   const meeting = await Meeting.findById(notification.meetingId);
+
   if (meeting) {
-    const hostNotification = new Notification({
+    // إرسال إشعار لصاحب الاجتماع بالرد الجديد
+    await Notification.create({
       userId: meeting.created_by,
       type: "response",
       message: `${req.user.name} has ${response} the invitation.`,
       meetingId: meeting._id,
       status: "unread"
     });
-    await hostNotification.save();
+
+    // لو عدد الرافضين أكتر من أو يساوي 50% من اللي ردوا
+    if (totalResponses >= 2 && rejected / totalResponses >= 0.5) {
+      await Notification.create({
+        userId: meeting.created_by,
+        type: "warning",
+        message: `More than 50% of invitees rejected the meeting. Do you want to continue or cancel it?`,
+        meetingId: meeting._id,
+        status: "unread"
+      });
+    }
   }
 
   res.status(200).json({
     message: `Invitation ${response}`,
     accepted,
-    rejected,
-    delayedCount: delayed.length,
-    delayedUsers: delayed.map(d => ({ userId: d.userId, delay: d.delayMinutes })),
+    rejected
   });
 }));
+
 
 
 
