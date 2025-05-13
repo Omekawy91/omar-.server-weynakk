@@ -272,7 +272,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
     // لو أكتر من 50% رفضوا
     if (rejected / total > 0.5 && meeting) {
       await Notification.create({
-        userId: meeting.created_by,
+        userId: meeting.createdBy,
         title: "Too Many Rejections",
         message: `More than 50% of invitees rejected the meeting.`,
         meetingId: meeting._id,
