@@ -14,7 +14,7 @@ const meetingSchema = new mongoose.Schema({
   date: String,
   time: String,
   phoneNumbers: [String],
-  createdby: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, 
   isPublic: Boolean,
   location: {
     lat: Number,
