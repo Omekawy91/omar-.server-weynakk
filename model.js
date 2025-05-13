@@ -42,8 +42,16 @@ const notificationSchema = new mongoose.Schema({
   title: { type: String, required: true },
   message: { type: String, required: true },
   meetingId: { type: mongoose.Schema.Types.ObjectId, ref: "Meeting", required: true },
-  type: { type: String, enum: ["invitation", "reminder", "update"], required: true },
-  status: { type: String, enum: ["pending", "accepted", "rejected", "delayed"], default: "pending" },
+  type: {
+    type: String,
+    enum: ["invitation", "reminder", "update", "response"], 
+    required: true
+  },
+  status: {
+    type: String,
+    enum: ["pending", "accepted", "rejected", "delayed", "unread"], 
+    default: "pending"
+  },
   delayMinutes: { type: Number, default: 0 }
 });
 
