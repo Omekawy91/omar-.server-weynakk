@@ -305,15 +305,16 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
   session.startTransaction();
 
 try {
-    const meeting = new Meeting({
-      meetingname,
-      date,
-      time,
-      phoneNumbers,
-   createdBy: req.user._id,  
-      isPublic,
-      location: { lat: Number(lat), lng: Number(lng) }
-    });
+  const meeting = new Meeting({
+  meetingname,
+  date,
+  time,
+  phoneNumbers,
+  createdBy: req.user.id,  
+  isPublic,
+  location: { lat: Number(lat), lng: Number(lng) }
+});
+
 
     await meeting.save({ session });
 
