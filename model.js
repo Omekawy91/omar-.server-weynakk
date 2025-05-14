@@ -47,18 +47,13 @@ const notificationSchema = new mongoose.Schema({
   delayMinutes: { type: Number, default: 0 }
 });
 
-const meetingResponseSchema = new mongoose.Schema({
-  meetingId: { type: mongoose.Schema.Types.ObjectId, ref: "Meeting" },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-  response: { type: String, enum: ["accepted", "rejected"], required: true },
-  delayMinutes: { type: Number, default: 0 }
-}, { timestamps: true });
+
 
 const User = mongoose.model("User", userSchema);
 const Meeting = mongoose.model("Meeting", meetingSchema);
 const Participant = mongoose.model("Participant", participantSchema);
 const Movement = mongoose.model("Movement", movementSchema);
 const Notification = mongoose.model("Notification", notificationSchema);
-const MeetingResponse = mongoose.model("MeetingResponse", meetingResponseSchema);
 
-module.exports = { User, Meeting, Participant, Movement, Notification, MeetingResponse };
+
+module.exports = { User, Meeting, Participant, Movement, Notification };
