@@ -250,18 +250,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
       }
     }
 
-    // Notify meeting creator
-    const meeting = await Meeting.findById(notification.meetingId);
-    if (meeting && meeting.createdBy) { // Check if meeting and createdBy exist
-      await Notification.create({
-        userId: meeting.createdBy, // Make sure this matches your schema
-        title: "Meeting Response",
-        message: `${req.user.name} has ${response} the invitation.`,
-        meetingId: meeting._id,
-        type: "response",
-        status: "unread"
-      });
-    }
+    
 
     // Calculate response ratios
     const allNotifications = await Notification.find({ meetingId: notification.meetingId });
