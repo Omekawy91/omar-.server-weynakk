@@ -175,44 +175,19 @@ app.get("/", (req, res) => {
 app.post("/logout", (req, res) => {
   res.json({ message: "Logged out successfully!" });
 });
+app.post("/notifications", authenticateToken, asyncHandler(async (req, res) => {
+  const { userId } = req.body;
 
-app.post("/notifications", authenticateToken, async (req, res) => {
-  const { userId, title, message, meetingId, type, status } = req.body;
-
-  if (!userId || !title || !message || !meetingId || !type) {
-    return res.status(400).json({ message: "Missing required fields" });
+  if (!userId) {
+    return res.status(400).json({ message: "userId is required in the body." });
   }
 
-  try {
-    const notification = new Notification({
-      userId,
-      title,
-      message,
-      meetingId,
-      type,
-      status: status || "pending"
-    });
-    
-    const saved = await notification.save();
-    res.status(201).json(saved);
-  } catch (err) {
-    res.status(500).json({ message: "Internal Server Error", error: err.message });
-  }
-});
-
-app.get("/notifications/:userId", authenticateToken, asyncHandler(async (req, res) => {
-  const notifications = await Notification.find({ userId: req.params.userId });
+  const notifications = await Notification.find({ userId });
   res.json(notifications);
 }));
 
-app.put("/notifications/:id", authenticateToken, asyncHandler(async (req, res) => {
-  const updated = await Notification.findByIdAndUpdate(
-    req.params.id,
-    { status: req.body.status },
-    { new: true }
-  );
-  res.json(updated);
-}));
+
+
 
 app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, res) => {
   try {
