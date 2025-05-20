@@ -175,19 +175,13 @@ app.get("/", (req, res) => {
 app.post("/logout", (req, res) => {
   res.json({ message: "Logged out successfully!" });
 });
-app.post("/notifications", authenticateToken, asyncHandler(async (req, res) => {
-  const { userId } = req.body;
 
-  if (!userId) {
-    return res.status(400).json({ message: "userId is required in the body." });
-  }
 
+app.get("/notifications", authenticateToken, asyncHandler(async (req, res) => {
+  const userId = req.user.id;
   const notifications = await Notification.find({ userId });
   res.json(notifications);
 }));
-
-
-
 
 app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, res) => {
   try {
