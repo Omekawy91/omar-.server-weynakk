@@ -321,7 +321,7 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
 }));
 
 app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) => {
-  const meetingId = req.body.id;  
+  const meetingId = req.body;  
 
   if (!meetingId) return res.status(400).json({ message: "Meeting id is required in body" });
 
