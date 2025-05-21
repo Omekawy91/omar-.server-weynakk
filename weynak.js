@@ -320,6 +320,35 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
   }
 }));
 
+app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) => {
+  const meetingId = req.body.id;  
+
+  if (!meetingId) return res.status(400).json({ message: "Meeting id is required in body" });
+
+  const meeting = await Meeting.findById(meetingId).lean();
+  if (!meeting) return res.status(404).json({ message: "Meeting not found" });
+
+  const phonesArray = meeting.phoneNumbers;
+  const users = await User.find({ phone: { $in: phonesArray } }).lean();
+
+  const notifications = await Notification.find({ meetingId }).lean();
+  const statusMap = {};
+  notifications.forEach(n => {
+    statusMap[n.userId.toString()] = n.status;
+  });
+
+  const invitations = users.map(user => ({
+    name: user.name,
+    status: statusMap[user._id.toString()] || "pending"
+  }));
+
+  res.status(200).json({
+    ...meeting,
+    invitations
+  });
+}));
+
+
 app.post("/meetings/delete", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingId } = req.body;
   const userId = req.user.id;
