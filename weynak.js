@@ -179,9 +179,16 @@ app.post("/logout", (req, res) => {
 
 app.get("/notifications", authenticateToken, asyncHandler(async (req, res) => {
   const userId = req.user.id;
+
+  if (req.query.delete) {
+    await Notification.deleteOne({ _id: req.query.delete, userId });
+    return res.json({ message: "Notification deleted" });
+  }
+
   const notifications = await Notification.find({ userId });
   res.json(notifications);
 }));
+
 
 app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, res) => {
   try {
@@ -255,24 +262,28 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
 
 
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
-  const { meetingname, date, time, phoneNumbers, isPublic, lat, lng } = req.body;
+  const { meetingname, date, time, phoneNumbers, isPublic, lat, lng, deleteNotification } = req.body;
+
+  if (deleteNotification) {
+    await Notification.deleteOne({ _id: deleteNotification, userId: req.user.id });
+    return res.json({ message: "Notification deleted" });
+  }
 
   if (!lat || !lng) return res.status(400).json({ message: "Location (lat, lng) is required" });
 
   const session = await mongoose.startSession();
   session.startTransaction();
 
-try {
-  const meeting = new Meeting({
-  meetingname,
-  date,
-  time,
-  phoneNumbers,
-  createdBy: req.user.id,  
-  isPublic,
-  location: { lat: Number(lat), lng: Number(lng) }
-});
-
+  try {
+    const meeting = new Meeting({
+      meetingname,
+      date,
+      time,
+      phoneNumbers,
+      createdBy: req.user.id,  
+      isPublic,
+      location: { lat: Number(lat), lng: Number(lng) }
+    });
 
     await meeting.save({ session });
 
