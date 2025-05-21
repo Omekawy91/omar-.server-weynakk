@@ -18,7 +18,8 @@ const meetingSchema = new mongoose.Schema({
   isPublic: Boolean,
   location: {
     lat: Number,
-    lng: Number
+    lng: Number,
+    address: String
   }
 });
 
