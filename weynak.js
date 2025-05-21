@@ -185,7 +185,7 @@ app.get("/notifications", authenticateToken, asyncHandler(async (req, res) => {
 
 
 app.post("/notifications/delete", authenticateToken, asyncHandler(async (req, res) => {
-  const { Id } = req.body;
+  const { id } = req.body;
   const userId = req.user.id;
 
   const notification = await Notification.findOne({ _id: id, userId });
