@@ -323,14 +323,10 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
 app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingId } = req.body;
 
-  if (!meetingId) {
-    return res.status(400).json({ message: "Meeting id is required in body" });
-  }
+  if (!meetingId) return res.status(400).json({ message: "Meeting id is required in body" });
 
   const meeting = await Meeting.findById(meetingId).lean();
-  if (!meeting) {
-    return res.status(404).json({ message: "Meeting not found" });
-  }
+  if (!meeting) return res.status(404).json({ message: "Meeting not found" });
 
   const users = await User.find({ phone: { $in: meeting.phoneNumbers } }).lean();
   const notifications = await Notification.find({ meetingId }).lean();
@@ -345,10 +341,16 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
     status: statusMap[user._id.toString()] || "pending"
   }));
 
-  const location = meeting.location || { lat: null, lng: null, address: null };
+  const location = meeting.location ? {
+    lat: meeting.location.lat || null,
+    lng: meeting.location.lng || null,
+    address: meeting.location.address || null
+  } : { lat: null, lng: null, address: null };
+
+  const { phoneNumbers, ...meetingWithoutPhones } = meeting;
 
   res.status(200).json({
-    ...meeting,
+    ...meetingWithoutPhones,
     location,
     invitations
   });
