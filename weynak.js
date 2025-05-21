@@ -321,17 +321,16 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
 }));
 
 app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) => {
-  const meetingId = req.body;  
+  const { meetingId } = req.body;
 
   if (!meetingId) return res.status(400).json({ message: "Meeting id is required in body" });
 
   const meeting = await Meeting.findById(meetingId).lean();
   if (!meeting) return res.status(404).json({ message: "Meeting not found" });
 
-  const phonesArray = meeting.phoneNumbers;
-  const users = await User.find({ phone: { $in: phonesArray } }).lean();
-
+  const users = await User.find({ phone: { $in: meeting.phoneNumbers } }).lean();
   const notifications = await Notification.find({ meetingId }).lean();
+
   const statusMap = {};
   notifications.forEach(n => {
     statusMap[n.userId.toString()] = n.status;
@@ -342,12 +341,18 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
     status: statusMap[user._id.toString()] || "pending"
   }));
 
+  const location = meeting.location ? {
+    lat: meeting.location.lat || null,
+    lng: meeting.location.lng || null,
+    address: meeting.location.address || null
+  } : { lat: null, lng: null, address: null };
+
   res.status(200).json({
     ...meeting,
+    location,
     invitations
   });
 }));
-
 
 app.post("/meetings/delete", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingId } = req.body;
