@@ -179,14 +179,24 @@ app.post("/logout", (req, res) => {
 
 app.get("/notifications", authenticateToken, asyncHandler(async (req, res) => {
   const userId = req.user.id;
-
-  if (req.query.delete) {
-    await Notification.deleteOne({ _id: req.query.delete, userId });
-    return res.json({ message: "Notification deleted" });
-  }
-
   const notifications = await Notification.find({ userId });
   res.json(notifications);
+}));
+
+
+app.post("/notifications/delete", authenticateToken, asyncHandler(async (req, res) => {
+  const { id } = req.body;
+  const userId = req.user.id;
+
+  const notification = await Notification.findOne({ _id: id, userId });
+
+  if (!notification) {
+    return res.status(404).json({ message: "Notification not found or unauthorized" });
+  }
+
+  await Notification.deleteOne({ _id: id, userId });
+
+  res.status(200).json({ message: "Notification deleted successfully" });
 }));
 
 
@@ -262,12 +272,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
 
 
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
-  const { meetingname, date, time, phoneNumbers, isPublic, lat, lng, deleteNotification } = req.body;
-
-  if (deleteNotification) {
-    await Notification.deleteOne({ _id: deleteNotification, userId: req.user.id });
-    return res.json({ message: "Notification deleted" });
-  }
+  const { meetingname, date, time, phoneNumbers, isPublic, lat, lng} = req.body;
 
   if (!lat || !lng) return res.status(400).json({ message: "Location (lat, lng) is required" });
 
@@ -315,6 +320,20 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
   }
 }));
 
+app.post("/meetings/delete", authenticateToken, asyncHandler(async (req, res) => {
+  const { meetingId } = req.body;
+  const userId = req.user.id;
+
+  const meeting = await Meeting.findOne({ _id: meetingId, createdBy: userId });
+  if (!meeting) {
+    return res.status(404).json({ message: "Meeting not found or unauthorized" });
+  }
+
+  await Meeting.deleteOne({ _id: meetingId });
+  await Notification.deleteMany({ meetingId });
+
+  res.status(200).json({ message: "Meeting and related notifications deleted successfully" });
+}));
 
 
 app.get("/meetings/user", authenticateToken, asyncHandler(async (req, res) => {
