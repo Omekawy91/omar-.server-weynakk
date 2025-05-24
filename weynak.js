@@ -344,8 +344,10 @@ res.status(200).json({
   location,
   invitations
 });
-  
-  app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
+}));
+
+app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
+
   const meetings = await Meeting.find({
     $or: [
       { createdBy: req.user.id },
