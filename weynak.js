@@ -288,22 +288,27 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
 
     await meeting.save({ session });
 
-    if (phoneNumbers && phoneNumbers.length > 0) {
-      const phonesArray = Array.isArray(phoneNumbers) ? phoneNumbers : phoneNumbers.split(',').map(p => p.trim());
-      const invitedUsers = await User.find({ phone: { $in: phonesArray } }).session(session);
+if (phoneNumbers && phoneNumbers.length > 0) {
+  const phonesArray = Array.isArray(phoneNumbers) ? phoneNumbers : phoneNumbers.split(',').map(p => p.trim());
+  const invitedUsers = await User.find({ phone: { $in: phonesArray } }).session(session);
 
-      await Promise.all(invitedUsers.map(async (user) => {
-        const notification = new Notification({
-          userId: user._id,
-          title: "Meeting Invitation",
-          message: `${req.user.name} invited you to ${meeting.meetingname}`,
-          meetingId: meeting._id,
-          type: "invitation",
-          status: "pending"
-        });
-        await notification.save({ session });
-      }));
-    }
+  meeting.invitations = invitedUsers.map(user => ({
+    userId: user._id,
+    status: 'pending'
+  }));
+
+  await Promise.all(invitedUsers.map(async (user) => {
+    const notification = new Notification({
+      userId: user._id,
+      title: "Meeting Invitation",
+      message: ${req.user.name} invited you to ${meeting.meetingname},
+      meetingId: meeting._id,
+      type: "invitation",
+      status: "pending"
+    });
+    await notification.save({ session });
+  }));
+}
 
     await session.commitTransaction();
     res.status(201).json(meeting);
