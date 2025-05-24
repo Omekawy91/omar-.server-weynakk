@@ -333,22 +333,30 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
     status: n.status
   }));
 
-  const location = meeting.location ? {
-    lat: meeting.location.lat || null,
-    lng: meeting.location.lng || null,
-    address: meeting.location.address || null
-  } : { lat: null, lng: null, address: null };
+ const location = meeting.location ? {
+  address: meeting.location.address || null
+} : { address: null };
 
-  const { phoneNumbers, ...meetingWithoutPhones } = meeting;
+const { phoneNumbers, ...meetingWithoutPhones } = meeting;
 
-  res.status(200).json({
-    ...meetingWithoutPhones,
-    location,
-    invitations
+res.status(200).json({
+  ...meetingWithoutPhones,
+  location,
+  invitations
+});
+  
+  app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
+  const meetings = await Meeting.find({
+    $or: [
+      { createdBy: req.user.id },
+      { acceptedUsers: req.user.id }
+    ]
   });
+
+  res.status(200).json(meetings);
 }));
 
-
+  
 app.post("/meetings/delete", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingId } = req.body;
   const userId = req.user.id;
