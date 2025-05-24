@@ -219,8 +219,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
 
     notification.status = response;
     await notification.save();
-
-    // Add participant if accepted
+    
     if (response === "accepted") {
       const alreadyJoined = await Participant.findOne({
         meeting_id: notification.meetingId,
@@ -236,9 +235,6 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
       }
     }
 
-    
-
-    // Calculate response ratios
     const allNotifications = await Notification.find({ meetingId: notification.meetingId });
     const accepted = allNotifications.filter(n => n.status === "accepted").length;
     const rejected = allNotifications.filter(n => n.status === "rejected").length;
@@ -272,7 +268,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
 
 
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
-  const { meetingname, date, time, phoneNumbers, isPublic, lat, lng} = req.body;
+  const { meetingname, date, time, phoneNumbers, isPublic, lat, lng } = req.body;
 
   if (!lat || !lng) return res.status(400).json({ message: "Location (lat, lng) is required" });
 
@@ -285,7 +281,7 @@ app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
       date,
       time,
       phoneNumbers,
-      createdBy: req.user.id,  
+      createdBy: req.user.id,
       isPublic,
       location: { lat: Number(lat), lng: Number(lng) }
     });
@@ -328,17 +324,13 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
   const meeting = await Meeting.findById(meetingId).lean();
   if (!meeting) return res.status(404).json({ message: "Meeting not found" });
 
-  const users = await User.find({ phone: { $in: meeting.phoneNumbers } }).lean();
-  const notifications = await Notification.find({ meetingId }).lean();
+  const populatedNotifications = await Notification.find({ meetingId })
+    .populate("userId", "name")
+    .lean();
 
-  const statusMap = {};
-  notifications.forEach(n => {
-    statusMap[n.userId.toString()] = n.status;
-  });
-
-  const invitations = users.map(user => ({
-    name: user.name,
-    status: statusMap[user._id.toString()] || "pending"
+  const invitations = populatedNotifications.map(n => ({
+    name: n.userId?.name || "Unknown",
+    status: n.status
   }));
 
   const location = meeting.location ? {
@@ -355,6 +347,7 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
     invitations
   });
 }));
+
 
 app.post("/meetings/delete", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingId } = req.body;
