@@ -20,7 +20,11 @@ const meetingSchema = new mongoose.Schema({
     lat: Number,
     lng: Number,
     address: String
-  }
+  },
+  invitations: [{
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' }
+  }]
 });
 
 const participantSchema = new mongoose.Schema({
