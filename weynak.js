@@ -353,7 +353,7 @@ res.status(200).json({
 }));
 
 app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
-
+  console.log("Current User ID:", req.user.id); // تأكيد
   const meetings = await Meeting.find({
     $or: [
       { createdBy: req.user.id },
