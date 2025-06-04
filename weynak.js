@@ -202,24 +202,27 @@ app.post("/notifications/delete", authenticateToken, asyncHandler(async (req, re
 
 app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, res) => {
   try {
-    const { notificationId, response } = req.body;
+    const { meetingId, response } = req.body; 
 
-    const notification = await Notification.findById(notificationId);
-    if (!notification || !notification.userId.equals(req.user.id)) {
-      return res.status(404).json({ message: "Notification not found or unauthorized" });
+    if (!meetingId) return res.status(400).json({ message: "Meeting ID is required" });
+
+    const notification = await Notification.findOne({
+      meetingId,
+      userId: req.user.id,
+      type: "invitation"
+    });
+
+    if (!notification) {
+      return res.status(404).json({ message: "Invitation not found for this user" });
     }
 
     if (!["accepted", "rejected"].includes(response)) {
       return res.status(400).json({ message: "Invalid response" });
     }
 
-    if (!notification.meetingId) {
-      return res.status(400).json({ message: "Notification is missing meetingId" });
-    }
-
     notification.status = response;
     await notification.save();
-    
+
     if (response === "accepted") {
       const alreadyJoined = await Participant.findOne({
         meeting_id: notification.meetingId,
@@ -235,11 +238,12 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
       }
     }
 
-    const allNotifications = await Notification.find({ meetingId: notification.meetingId });
+    const allNotifications = await Notification.find({ meetingId });
     const accepted = allNotifications.filter(n => n.status === "accepted").length;
     const rejected = allNotifications.filter(n => n.status === "rejected").length;
     const total = allNotifications.length;
 
+    const meeting = await Meeting.findById(meetingId);
     if (rejected / total > 0.5 && meeting && meeting.createdBy) {
       await Notification.create({
         userId: meeting.createdBy,
@@ -265,6 +269,7 @@ app.post("/notifications/respond", authenticateToken, asyncHandler(async (req, r
     });
   }
 }));
+
 
 
 app.post("/meetings", authenticateToken, asyncHandler(async (req, res) => {
