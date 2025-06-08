@@ -14,7 +14,7 @@ const meetingSchema = new mongoose.Schema({
   date: String,
   time: String,
   phoneNumbers: [String],
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, 
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   isPublic: Boolean,
   location: {
     lat: Number,
@@ -24,8 +24,10 @@ const meetingSchema = new mongoose.Schema({
   invitations: [{
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' }
-  }]
+  }],
+  acceptedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }]
 });
+
 
 const participantSchema = new mongoose.Schema({
   meeting_id: mongoose.Schema.Types.ObjectId,
