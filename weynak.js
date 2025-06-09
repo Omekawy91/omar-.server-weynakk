@@ -326,13 +326,15 @@ if (phoneNumbers && phoneNumbers.length > 0) {
 app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingId } = req.body;
 
-  if (!meetingId) return res.status(400).json({ message: "Meeting id is required in body" });
+  if (!meetingId)
+    return res.status(400).json({ message: "Meeting id is required in body" });
 
   const meeting = await Meeting.findById(meetingId)
     .populate("createdBy", "name")
     .lean();
 
-  if (!meeting) return res.status(404).json({ message: "Meeting not found" });
+  if (!meeting)
+    return res.status(404).json({ message: "Meeting not found" });
 
   const populatedNotifications = await Notification.find({ meetingId })
     .populate("userId", "name")
@@ -340,6 +342,7 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
 
   const invitations = populatedNotifications.map(n => ({
     name: n.userId?.name || "Unknown",
+    userId: n.userId?._id || null,
     status: n.status
   }));
 
@@ -354,18 +357,22 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
 
   const { phoneNumbers, ...meetingWithoutPhones } = meeting;
 
-  delete meetingWithoutPhones._id; 
+  delete meetingWithoutPhones._id;
+
   const createdByName = meeting.createdBy?.name || "Unknown";
+  const createdById = meeting.createdBy?._id?.toString() || null;
 
   res.status(200).json({
     ...meetingWithoutPhones,
-    createdBy: createdByName,
+    createdBy: {
+      name: createdByName,
+      id: createdById
+    },
     location,
     invitations,
     acceptedUsers
   });
 }));
-
 
 
 app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
