@@ -328,7 +328,10 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
 
   if (!meetingId) return res.status(400).json({ message: "Meeting id is required in body" });
 
-  const meeting = await Meeting.findById(meetingId).lean();
+  const meeting = await Meeting.findById(meetingId)
+    .populate("createdBy", "name")
+    .lean();
+
   if (!meeting) return res.status(404).json({ message: "Meeting not found" });
 
   const populatedNotifications = await Notification.find({ meetingId })
@@ -340,18 +343,23 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
     status: n.status
   }));
 
- const location = meeting.location ? {
-  address: meeting.location.address || null
-} : { address: null };
+  const location = meeting.location ? {
+    address: meeting.location.address || null
+  } : { address: null };
 
-const { phoneNumbers, ...meetingWithoutPhones } = meeting;
+  const { phoneNumbers, ...meetingWithoutPhones } = meeting;
 
-res.status(200).json({
-  ...meetingWithoutPhones,
-  location,
-  invitations
-});
+  delete meetingWithoutPhones._id; 
+  const createdByName = meeting.createdBy?.name || "Unknown";
+
+  res.status(200).json({
+    ...meetingWithoutPhones,
+    createdBy: createdByName,
+    location,
+    invitations
+  });
 }));
+
 
 app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
   const userId = req.user.id;
@@ -395,18 +403,6 @@ app.get("/meetings/user", authenticateToken, asyncHandler(async (req, res) => {
     $or: [ { createdBy: userId }, { members: userId } ]
   });
   res.json(meetings);
-}));
-
-app.patch("/meetings/:id/privacy", authenticateToken, asyncHandler(async (req, res) => {
-  const { isPublic } = req.body;
-  const meeting = await Meeting.findById(req.params.id);
-  if (!meeting) return res.status(404).json({ message: "Meeting not found" });
-  if (meeting.createdBy.toString() !== req.user.id) return res.status(403).json({ message: "Unauthorized" });
-
-  meeting.isPublic = isPublic;
-  await meeting.save();
-
-  res.json({ message: "Privacy updated", meeting });
 }));
 
 app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
