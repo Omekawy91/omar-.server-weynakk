@@ -348,8 +348,9 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
     .map(n => n.userId?.name || "Unknown");
 
   const location = meeting.location ? {
-    address: meeting.location.address || null
-  } : { address: null };
+    lat: meeting.location.lat || null,
+    lng: meeting.location.lng || null
+  } : { lat: null, lng: null };
 
   const { phoneNumbers, ...meetingWithoutPhones } = meeting;
 
@@ -361,7 +362,7 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
     createdBy: createdByName,
     location,
     invitations,
-    acceptedUsers  
+    acceptedUsers
   });
 }));
 
