@@ -354,7 +354,7 @@ res.status(200).json({
 }));
 
 app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
-  console.log("Current User ID:", req.user.id); // تأكيد
+  console.log("Current User ID:", req.user.id); 
   const meetings = await Meeting.find({
     $or: [
       { createdBy: req.user.id },
@@ -364,6 +364,27 @@ app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
 
   res.status(200).json(meetings);
 }));
+
+app.post("/meetings/accept", authenticateToken, asyncHandler(async (req, res) => {
+  const { meetingId } = req.body;
+
+  if (!meetingId) {
+    return res.status(400).json({ message: "Meeting ID is required" });
+  }
+
+  const meeting = await Meeting.findById(meetingId);
+  if (!meeting) {
+    return res.status(404).json({ message: "Meeting not found" });
+  }
+
+  if (!meeting.acceptedUsers.includes(req.user.id)) {
+    meeting.acceptedUsers.push(req.user.id);
+    await meeting.save();
+  }
+
+  res.status(200).json({ message: "Meeting accepted successfully" });
+}));
+
 
   
 app.post("/meetings/delete", authenticateToken, asyncHandler(async (req, res) => {
