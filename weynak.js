@@ -343,6 +343,10 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
     status: n.status
   }));
 
+  const acceptedUsers = populatedNotifications
+    .filter(n => n.status === "accepted")
+    .map(n => n.userId?.name || "Unknown");
+
   const location = meeting.location ? {
     address: meeting.location.address || null
   } : { address: null };
@@ -356,9 +360,11 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
     ...meetingWithoutPhones,
     createdBy: createdByName,
     location,
-    invitations
+    invitations,
+    acceptedUsers  
   });
 }));
+
 
 
 app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
