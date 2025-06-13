@@ -35,14 +35,38 @@ const participantSchema = new mongoose.Schema({
   approved: Boolean
 });
 
-const movementSchema = new mongoose.Schema({
-  user_id: mongoose.Schema.Types.ObjectId,
-  location: {
-    lat: Number,
-    lng: Number
+const locationSchema = new mongoose.Schema({
+  lat: {
+    type: Number,
+    required: true
   },
-  status: String
+  lng: {
+    type: Number,
+    required: true
+  }
+}, { _id: false });
+
+const movementSchema = new mongoose.Schema({
+  user_id: {
+    type: String, 
+    required: true,
+    index: true
+  },
+  location: {
+    type: locationSchema,
+    required: true
+  },
+  status: {
+    type: String,
+    enum: ['on_the_way', 'arrived', 'waiting', 'left'],
+    default: 'on_the_way'
+  }
+}, {
+  timestamps: true 
 });
+
+module.exports = mongoose.model('Movement', movementSchema);
+
 
 const notificationSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
