@@ -431,6 +431,49 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
   res.status(201).json({ message: "Joined meeting successfully", participant });
 }));
 
+app.post("/group-movement", asyncHandler(async (req, res) => {
+  const { user_ids, destination } = req.body; // destination: { lat, lng }
+  const movements = await Movement.aggregate([
+    { $match: { user_id: { $in: user_ids } } },
+    { $sort: { createdAt: -1 } },
+    {
+      $group: {
+        _id: "$user_id",
+        location: { $first: "$location" },
+        updatedAt: { $first: "$createdAt" }
+      }
+    }
+  ]);
+
+
+  const calculateETA = (from, to) => {
+    const toRad = deg => deg * (Math.PI / 180);
+    const R = 6371;
+
+    const dLat = toRad(to.lat - from.lat);
+    const dLng = toRad(to.lng - from.lng);
+
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) * Math.sin(dLng/2)**2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distanceKm = R * c;
+
+    const speedKmh = 40; 
+    const timeMinutes = (distanceKm / speedKmh) * 60;
+    return Math.round(timeMinutes);
+  };
+
+  const results = movements.map(user => ({
+    user_id: user._id,
+    current_location: user.location,
+    eta_minutes: calculateETA(user.location, destination),
+    last_updated: user.updatedAt
+  }));
+
+  res.json({
+    destination,
+    users: results
+  });
+}));
 
 
 const server = app.listen(port, () => {
