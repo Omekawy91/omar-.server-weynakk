@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-const axios = require('axios');
+const axios = require("axios");
 const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
 const cors = require("cors");
