@@ -432,28 +432,47 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
 }));
 
 app.post("/group-movement", asyncHandler(async (req, res) => {
-  let user_id, destination;
+  let user_ids, destination;
 
   try {
-    user_id = req.body.user_ids; // ID string عادي
-    destination = JSON.parse(req.body.destination); // لأن destination لسه جاية كـ JSON string
+    user_ids = req.body.user_ids; // لازم تكون مصفوفة IDs
+    destination = JSON.parse(req.body.destination);
   } catch (err) {
     return res.status(400).json({ message: "Invalid input" });
   }
 
-  if (!user_id  !destination?.lat  !destination?.lng) {
+  if (
+    !Array.isArray(user_ids) || user_ids.length === 0 ||
+    !destination?.lat || !destination?.lng
+  ) {
     return res.status(400).json({ message: "Missing or invalid fields" });
   }
 
-  // استرجاع آخر موقع للمستخدم
   const movements = await Movement.aggregate([
-    { $match: { user_id: user_id } },
+    { $match: { user_id: { $in: user_ids } } },
     { $sort: { createdAt: -1 } },
     {
       $group: {
         _id: "$user_id",
         location: { $first: "$location" },
         updatedAt: { $first: "$createdAt" }
+      }
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "_id",
+        foreignField: "_id",
+        as: "user"
+      }
+    },
+    { $unwind: "$user" },
+    {
+      $project: {
+        _id: 0,
+        username: "$user.username",
+        location: 1,
+        updatedAt: 1
       }
     }
   ]);
@@ -478,7 +497,7 @@ app.post("/group-movement", asyncHandler(async (req, res) => {
   };
 
   const results = movements.map(user => ({
-    user_id: user._id,
+    username: user.username,
     current_location: user.location,
     eta_minutes: calculateETA(user.location, destination),
     last_updated: user.updatedAt
@@ -489,6 +508,7 @@ app.post("/group-movement", asyncHandler(async (req, res) => {
     users: results
   });
 }));
+
 
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
