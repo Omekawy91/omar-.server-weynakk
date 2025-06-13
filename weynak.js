@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const axios = require('axios');
 const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -431,11 +432,51 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
   res.status(201).json({ message: "Joined meeting successfully", participant });
 }));
 
-app.post("/movements", asyncHandler(async (req, res) => {
-  const { user_id, lat, lng } = req.body;
-  const movement = new Movement({ user_id, location: { lat, lng }, status: "في الطريق" });
-  await movement.save();
-  res.json(movement);
+app.post("/group-movement", asyncHandler(async (req, res) => {
+  const { user_ids, destination } = req.body;
+
+  const movements = await Movement.aggregate([
+    { $match: { user_id: { $in: user_ids } } },
+    { $sort: { createdAt: -1 } },
+    {
+      $group: {
+        _id: "$user_id",
+        location: { $first: "$location" },
+        updatedAt: { $first: "$createdAt" }
+      }
+    }
+  ]);
+
+  const origins = movements.map(m => `${m.location.lat},${m.location.lng}`).join('|');
+  const dest = `${destination.lat},${destination.lng}`;
+
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY; // تأكد من ضبط مفتاح Google API في .env
+
+  const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origins}&destinations=${dest}&key=${apiKey}&language=ar`;
+
+  const { data } = await axios.get(url);
+
+  if (data.status !== "OK") {
+    return res.status(500).json({ error: "Failed to fetch distances from Google Maps" });
+  }
+
+  const results = movements.map((user, index) => {
+    const element = data.rows[index].elements[0];
+
+    return {
+      user_id: user._id,
+      current_location: user.location,
+      distance_text: element.distance.text,
+      duration_text: element.duration.text,
+      duration_minutes: Math.round(element.duration.value / 60),
+      last_updated: user.updatedAt
+    };
+  });
+
+  res.json({
+    destination,
+    users: results
+  });
 }));
 
 const server = app.listen(port, () => {
