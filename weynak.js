@@ -432,9 +432,22 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
 }));
 
 app.post("/group-movement", asyncHandler(async (req, res) => {
-  const { user_ids, destination } = req.body; // destination: { lat, lng }
+  let user_id, destination;
+
+  try {
+    user_id = req.body.user_ids; // ID string عادي
+    destination = JSON.parse(req.body.destination); // لأن destination لسه جاية كـ JSON string
+  } catch (err) {
+    return res.status(400).json({ message: "Invalid input" });
+  }
+
+  if (!user_id  !destination?.lat  !destination?.lng) {
+    return res.status(400).json({ message: "Missing or invalid fields" });
+  }
+
+  // استرجاع آخر موقع للمستخدم
   const movements = await Movement.aggregate([
-    { $match: { user_id: { $in: user_ids } } },
+    { $match: { user_id: user_id } },
     { $sort: { createdAt: -1 } },
     {
       $group: {
@@ -445,7 +458,6 @@ app.post("/group-movement", asyncHandler(async (req, res) => {
     }
   ]);
 
-
   const calculateETA = (from, to) => {
     const toRad = deg => deg * (Math.PI / 180);
     const R = 6371;
@@ -453,11 +465,14 @@ app.post("/group-movement", asyncHandler(async (req, res) => {
     const dLat = toRad(to.lat - from.lat);
     const dLng = toRad(to.lng - from.lng);
 
-    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) * Math.sin(dLng/2)**2;
+    const a = Math.sin(dLat / 2) ** 2 +
+              Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
+              Math.sin(dLng / 2) ** 2;
+
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distanceKm = R * c;
 
-    const speedKmh = 40; 
+    const speedKmh = 40;
     const timeMinutes = (distanceKm / speedKmh) * 60;
     return Math.round(timeMinutes);
   };
@@ -474,7 +489,6 @@ app.post("/group-movement", asyncHandler(async (req, res) => {
     users: results
   });
 }));
-
 
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
