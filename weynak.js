@@ -377,29 +377,22 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
 
 app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
   const userId = req.user.id;
-
+  
   const acceptedNotifications = await Notification.find({
     userId,
     type: "invitation",
     status: "accepted"
   }).select("meetingId");
 
-  const acceptedMeetingIds = acceptedNotifications.map(n => n.meetingId.toString());
+  const acceptedMeetingIds = acceptedNotifications.map(n => n.meetingId);
 
-  const meetings = await Meeting.find({
-    $or: [
-      { createdBy: userId },
-      { _id: { $in: acceptedMeetingIds } }
-    ]
+   const meetings = await Meeting.find({
+    _id: { $in: acceptedMeetingIds }
   });
 
-  const uniqueMeetingsMap = new Map();
-  meetings.forEach(meeting => {
-    uniqueMeetingsMap.set(meeting._id.toString(), meeting);
-  });
-
-  res.status(200).json(Array.from(uniqueMeetingsMap.values()));
+  res.status(200).json(meetings);
 }));
+
 
  
 app.post("/meetings/delete", authenticateToken, asyncHandler(async (req, res) => {
