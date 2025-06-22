@@ -384,7 +384,8 @@ app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
     status: "accepted"
   }).select("meetingId");
 
-  const acceptedMeetingIds = acceptedNotifications.map(n => n.meetingId);
+  const acceptedMeetingIds = acceptedNotifications.map(n => n.meetingId.toString());
+
   const meetings = await Meeting.find({
     $or: [
       { createdBy: userId },
@@ -392,8 +393,14 @@ app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
     ]
   });
 
-  res.status(200).json(meetings);
+  const uniqueMeetingsMap = new Map();
+  meetings.forEach(meeting => {
+    uniqueMeetingsMap.set(meeting._id.toString(), meeting);
+  });
+
+  res.status(200).json(Array.from(uniqueMeetingsMap.values()));
 }));
+
  
 app.post("/meetings/delete", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingId } = req.body;
