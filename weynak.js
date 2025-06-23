@@ -399,16 +399,34 @@ app.post("/meetings/delete", authenticateToken, asyncHandler(async (req, res) =>
   const { meetingId } = req.body;
   const userId = req.user.id;
 
-  const meeting = await Meeting.findOne({ _id: meetingId, createdBy: userId });
+  const meeting = await Meeting.findById(meetingId);
+
   if (!meeting) {
-    return res.status(404).json({ message: "Meeting not found or unauthorized" });
+    return res.status(404).json({ message: "Meeting not found" });
   }
 
-  await Meeting.deleteOne({ _id: meetingId });
-  await Notification.deleteMany({ meetingId });
+  if (meeting.createdBy.toString() === userId) {
+  
+    await Meeting.deleteOne({ _id: meetingId });
+    await Notification.deleteMany({ meetingId });
+    await Participant.deleteMany({ meetingId }); 
+    return res.status(200).json({ message: "Meeting and related data deleted successfully" });
+  } else {
+    const notification = await Notification.findOneAndDelete({
+      meetingId,
+      userId,
+      type: "invitation",
+      status: "accepted"
+    });
 
-  res.status(200).json({ message: "Meeting and related notifications deleted successfully" });
+    if (notification) {
+      return res.status(200).json({ message: "You left the meeting successfully" });
+    } else {
+      return res.status(403).json({ message: "Not authorized to delete this meeting" });
+    }
+  }
 }));
+
 
 
 app.get("/meetings/user", authenticateToken, asyncHandler(async (req, res) => {
@@ -435,7 +453,7 @@ app.post("/group-movement", asyncHandler(async (req, res) => {
   let user_ids, destination;
 
   try {
-    user_ids = req.body.user_ids; // لازم تكون مصفوفة IDs
+    user_ids = req.body.user_ids; 
     destination = JSON.parse(req.body.destination);
   } catch (err) {
     return res.status(400).json({ message: "Invalid input" });
