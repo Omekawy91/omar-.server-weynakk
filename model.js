@@ -13,6 +13,10 @@ const meetingSchema = new mongoose.Schema({
   meetingname: String,
   date: String,
   time: String,
+  duration: {
+    type: Number,
+    default: 60
+  },
   phoneNumbers: [String],
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   isPublic: Boolean,
