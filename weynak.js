@@ -182,6 +182,30 @@ app.get("/notifications", authenticateToken, asyncHandler(async (req, res) => {
   const notifications = await Notification.find({ userId });
   res.json(notifications);
 }));
+app.post("/notifications/delay", authenticateToken, asyncHandler(async (req, res) => {
+  const { meetingId, delayMinutes } = req.body;
+
+  if (!meetingId || !delayMinutes)
+    return res.status(400).json({ message: "Meeting ID and delay time are required" });
+
+  const meeting = await Meeting.findById(meetingId);
+  if (!meeting) return res.status(404).json({ message: "Meeting not found" });
+
+  const existingNotification = await Notification.findOne({
+    meetingId,
+    userId: req.user.id,
+    type: "invitation"
+  });
+
+  if (!existingNotification)
+    return res.status(404).json({ message: "You are not invited to this meeting" });
+
+  existingNotification.delayMinutes = delayMinutes;
+  await existingNotification.save();
+
+  res.status(200).json({ message: "Delay recorded successfully" });
+}));
+
 
 
 app.post("/notifications/delete", authenticateToken, asyncHandler(async (req, res) => {
@@ -343,7 +367,8 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
   const invitations = populatedNotifications.map(n => ({
     name: n.userId?.name || "Unknown",
     userId: n.userId?._id || null,
-    status: n.status
+    status: n.status,
+    delayMinutes: n.delayMinutes || 0 
   }));
 
   const acceptedUsers = populatedNotifications
@@ -373,6 +398,7 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
     acceptedUsers
   });
 }));
+
 
 
 app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
