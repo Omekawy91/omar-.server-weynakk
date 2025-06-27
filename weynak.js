@@ -400,8 +400,9 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
 }));
 
 app.get("/meetings/today", authenticateToken, asyncHandler(async (req, res) => {
-  const now = new Date();
-  const todayStr = now.toISOString().split("T")[0];
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0]; 
+
 
   const acceptedNotifications = await Notification.find({
     userId: req.user.id,
@@ -412,44 +413,26 @@ app.get("/meetings/today", authenticateToken, asyncHandler(async (req, res) => {
   const acceptedMeetingIds = acceptedNotifications.map(n => n.meetingId);
 
   const meetings = await Meeting.find({
-    $and: [
-      { date: todayStr },
-      {
-        $or: [
-          { _id: { $in: acceptedMeetingIds } },
-          { createdBy: req.user.id }
-        ]
-      }
+    date: todayStr,
+    $or: [
+      { _id: { $in: acceptedMeetingIds } },
+      { createdBy: req.user.id }
     ]
   }).populate("createdBy", "name");
-
-  const activeMeetings = meetings.filter(meeting => {
-    if (!meeting.time) return false;
-
-    const startTime = new Date(`${meeting.date}T${meeting.time}`);
-    const endTime = new Date(startTime.getTime() + (meeting.duration || 60) * 60000);
-
-    return now < endTime;
-  });
-
-  activeMeetings.sort((a, b) => {
-    const aTime = new Date(`${a.date}T${a.time}`);
-    const bTime = new Date(`${b.date}T${b.time}`);
-    return aTime - bTime;
-  });
-
-  const response = activeMeetings.map(meeting => ({
+  
+  const result = meetings.map(meeting => ({
     _id: meeting._id,
     meetingname: meeting.meetingname,
     date: meeting.date,
     time: meeting.time,
-    duration: meeting.duration,
-    createdBy: meeting.createdBy.name, 
-    location: meeting.location
+    createdBy: meeting.createdBy?.name || "Unknown",
+    location: meeting.location,
+    duration: meeting.duration || 60
   }));
 
-  res.status(200).json(response);
+  res.status(200).json(result);
 }));
+
 
 
 app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
