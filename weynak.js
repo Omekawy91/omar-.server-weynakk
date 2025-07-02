@@ -529,48 +529,37 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
 app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => {
   try {
     const currentUserId = req.user.id;
-    const { meetingId, destination } = req.body;
+    const meetingId = req.body.meetingId;
 
-  
-    if (!meetingId) {
-      return res.status(400).json({ message: "Missing meetingId" });
+    if (!meetingId || !mongoose.Types.ObjectId.isValid(meetingId)) {
+      return res.status(400).json({ message: "Missing or invalid meetingId" });
     }
 
-  
+    const meeting = await Meeting.findById(meetingId);
+    if (!meeting) return res.status(404).json({ message: "Meeting not found" });
+
+    const invitedUsers = await Notification.find({ meetingId })
+      .select("userId")
+      .lean();
+
+    const user_ids = invitedUsers
+      .map(n => n.userId)
+      .filter(id => mongoose.Types.ObjectId.isValid(id))
+      .map(id => mongoose.Types.ObjectId(id));
+
+    const destination = req.body.destination;
     if (!destination?.lat || !destination?.lng) {
       return res.status(400).json({ message: "Missing or invalid destination fields" });
     }
 
-
-    const meeting = await Meeting.findById(meetingId);
-    if (!meeting) {
-      return res.status(404).json({ message: "Meeting not found" });
-    }
-
-    
-    if (!meeting.participants.includes(currentUserId)) {
-      return res.status(403).json({ message: "Unauthorized: You are not a participant in this meeting" });
-    }
-
-   
-    const invitedUsers = await Notification.find({ meetingId }).select("userId").lean();
-    const user_ids = invitedUsers.map(n => n.userId.toString());
-
-   
     const movements = await Movement.aggregate([
-      {
-        $match: {
-          user_id: { $in: user_ids.map(id => new mongoose.Types.ObjectId(id)) },
-          status: { $in: ["on_the_way", "waiting"] }
-        }
-      },
+      { $match: { user_id: { $in: user_ids } } },
       { $sort: { createdAt: -1 } },
       {
         $group: {
           _id: "$user_id",
           location: { $first: "$location" },
-          updatedAt: { $first: "$createdAt" },
-          status: { $first: "$status" }
+          updatedAt: { $first: "$createdAt" }
         }
       },
       {
@@ -587,26 +576,22 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
           _id: 1,
           username: "$user.username",
           location: 1,
-          updatedAt: 1,
-          status: 1
+          updatedAt: 1
         }
       }
     ]);
 
-  
     const toRad = deg => deg * (Math.PI / 180);
-
-    
     const calculateETA = (from, to) => {
-      const R = 6371; 
+      const R = 6371;
       const dLat = toRad(to.lat - from.lat);
       const dLng = toRad(to.lng - from.lng);
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) * Math.sin(dLng / 2) ** 2;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
+        Math.sin(dLng / 2) ** 2;
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       const distanceKm = R * c;
-      const speedKmh = 40; 
+      const speedKmh = 40;
       const timeMinutes = (distanceKm / speedKmh) * 60;
       return {
         etaMinutes: Math.round(timeMinutes),
@@ -614,7 +599,6 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       };
     };
 
-   
     const results = movements.map(user => {
       const { etaMinutes, distanceKm } = calculateETA(user.location, destination);
       const hasMoved = distanceKm > 0.1;
@@ -624,24 +608,22 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
         current_location: user.location,
         eta_minutes: etaMinutes,
         last_updated: user.updatedAt,
-        hasMoved,
-        status: user.status
+        hasMoved
       };
     });
 
-   
     results.sort((a, b) => a.eta_minutes - b.eta_minutes);
     const minETA = results[0]?.eta_minutes || 0;
 
-    
     for (let i = 1; i < results.length; i++) {
       const user = results[i];
       const timeToMove = user.eta_minutes - minETA;
-      if (timeToMove <= 15 && user.status === "on_the_way") {
+
+      if (timeToMove <= 15) {
         await Notification.create({
           userId: user._id,
           type: "reminder",
-          message: "It's time to start moving to arrive with others.",
+          message: `It's time to start moving to arrive with others.`,
           meetingId: meetingId
         });
       }
@@ -651,15 +633,15 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       destination,
       users: results
     });
+
   } catch (err) {
     console.error("Group Movement Error:", err);
-    res.status(500).json({ message: "Server Error", error: err.message });
+    res.status(500).json({
+      message: "Server Error",
+      error: err.message
+    });
   }
 }));
-
-
-
-
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
