@@ -364,12 +364,27 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
     .populate("userId", "name")
     .lean();
 
-  const invitations = populatedNotifications.map(n => ({
-    name: n.userId?.name || "Unknown",
-    userId: n.userId?._id || null,
-    status: n.status,
-    delayMinutes: n.delayMinutes || 0 
-  }));
+  const arrivalInfoMap = {};
+  (meeting.userArrivalInfo || []).forEach(info => {
+    arrivalInfoMap[info.userId?.toString()] = {
+      eta_minutes: info.eta_minutes,
+      hasMoved: info.hasMoved
+    };
+  });
+
+  const invitations = populatedNotifications.map(n => {
+    const userIdStr = n.userId?._id?.toString();
+    const arrivalInfo = arrivalInfoMap[userIdStr] || {};
+
+    return {
+      name: n.userId?.name || "Unknown",
+      userId: n.userId?._id || null,
+      status: n.status,
+      delayMinutes: n.delayMinutes || 0,
+      eta_minutes: arrivalInfo.eta_minutes || null,
+      hasMoved: arrivalInfo.hasMoved || false
+    };
+  });
 
   const acceptedUsers = populatedNotifications
     .filter(n => n.status === "accepted")
@@ -398,6 +413,7 @@ app.post("/meetings/details", authenticateToken, asyncHandler(async (req, res) =
     acceptedUsers
   });
 }));
+
 
 app.get("/meetings/today", authenticateToken, asyncHandler(async (req, res) => {
   const today = new Date();
