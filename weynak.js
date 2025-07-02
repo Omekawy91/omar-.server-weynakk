@@ -538,7 +538,7 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
 
   let destination;
   try {
-    destination = JSON.parse(req.body.destination);
+  destination = req.body.destination;
   } catch (err) {
     return res.status(400).json({ message: "Invalid destination format" });
   }
