@@ -526,108 +526,108 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
 }));
 
 app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => {
-  const currentUserId = req.user.id;
-  const meetingId = req.body.meetingId;
-
-  if (!meetingId) return res.status(400).json({ message: "Missing meetingId" });
-
-  const meeting = await Meeting.findById(meetingId);
-  if (!meeting) return res.status(404).json({ message: "Meeting not found" });
-
-  const user_ids = meeting.phoneNumbers.map(id => mongoose.Types.ObjectId(id));
-
-  let destination;
   try {
-  destination = req.body.destination;
+    const currentUserId = req.user.id;
+    const meetingId = req.body.meetingId;
+
+    if (!meetingId) return res.status(400).json({ message: "Missing meetingId" });
+
+    const meeting = await Meeting.findById(meetingId);
+    if (!meeting) return res.status(404).json({ message: "Meeting not found" });
+
+    const user_ids = meeting.phoneNumbers.map(id => mongoose.Types.ObjectId(id));
+    const destination = req.body.destination;
+
+    if (!destination?.lat || !destination?.lng) {
+      return res.status(400).json({ message: "Missing or invalid destination fields" });
+    }
+
+    const movements = await Movement.aggregate([
+      { $match: { user_id: { $in: user_ids } } },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: "$user_id",
+          location: { $first: "$location" },
+          updatedAt: { $first: "$createdAt" }
+        }
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "user"
+        }
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          _id: 1,
+          username: "$user.username",
+          location: 1,
+          updatedAt: 1
+        }
+      }
+    ]);
+
+    const toRad = deg => deg * (Math.PI / 180);
+    const calculateETA = (from, to) => {
+      const R = 6371;
+      const dLat = toRad(to.lat - from.lat);
+      const dLng = toRad(to.lng - from.lng);
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
+        Math.sin(dLng / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distanceKm = R * c;
+      const speedKmh = 40;
+      const timeMinutes = (distanceKm / speedKmh) * 60;
+      return {
+        etaMinutes: Math.round(timeMinutes),
+        distanceKm
+      };
+    };
+
+    const results = movements.map(user => {
+      const { etaMinutes, distanceKm } = calculateETA(user.location, destination);
+      const hasMoved = distanceKm > 0.1;
+      return {
+        _id: user._id,
+        username: user.username,
+        current_location: user.location,
+        eta_minutes: etaMinutes,
+        last_updated: user.updatedAt,
+        hasMoved
+      };
+    });
+
+    results.sort((a, b) => a.eta_minutes - b.eta_minutes);
+    const minETA = results[0]?.eta_minutes || 0;
+
+    for (let i = 1; i < results.length; i++) {
+      const user = results[i];
+      const timeToMove = user.eta_minutes - minETA;
+      if (timeToMove <= 15) {
+        await Notification.create({
+          userId: user._id,
+          type: "reminder",
+          message: `It's time to start moving to arrive with others.`,
+          meetingId: meetingId
+        });
+      }
+    }
+
+    res.json({
+      destination,
+      users: results
+    });
   } catch (err) {
-    return res.status(400).json({ message: "Invalid destination format" });
+    console.error(" Group Movement Error:", err);
+    res.status(500).json({ message: "Server Error", error: err.message });
   }
-
-  if (!destination?.lat || !destination?.lng) {
-    return res.status(400).json({ message: "Missing or invalid destination fields" });
-  }
-
-  const movements = await Movement.aggregate([
-    { $match: { user_id: { $in: user_ids } } },
-    { $sort: { createdAt: -1 } },
-    {
-      $group: {
-        _id: "$user_id",
-        location: { $first: "$location" },
-        updatedAt: { $first: "$createdAt" }
-      }
-    },
-    {
-      $lookup: {
-        from: "users",
-        localField: "_id",
-        foreignField: "_id",
-        as: "user"
-      }
-    },
-    { $unwind: "$user" },
-    {
-      $project: {
-        _id: 1,
-        username: "$user.username",
-        location: 1,
-        updatedAt: 1
-      }
-    }
-  ]);
-
-  const toRad = deg => deg * (Math.PI / 180);
-  const calculateETA = (from, to) => {
-    const R = 6371;
-    const dLat = toRad(to.lat - from.lat);
-    const dLng = toRad(to.lng - from.lng);
-    const a = Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
-      Math.sin(dLng / 2) ** 2;
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distanceKm = R * c;
-    const speedKmh = 40;
-    const timeMinutes = (distanceKm / speedKmh) * 60;
-    return {
-      etaMinutes: Math.round(timeMinutes),
-      distanceKm
-    };
-  };
-
-  const results = movements.map(user => {
-    const { etaMinutes, distanceKm } = calculateETA(user.location, destination);
-    const hasMoved = distanceKm > 0.1;
-    return {
-      _id: user._id,
-      username: user.username,
-      current_location: user.location,
-      eta_minutes: etaMinutes,
-      last_updated: user.updatedAt,
-      hasMoved
-    };
-  });
-
-  results.sort((a, b) => a.eta_minutes - b.eta_minutes);
-  const minETA = results[0]?.eta_minutes || 0;
-
-  for (let i = 1; i < results.length; i++) {
-    const user = results[i];
-    const timeToMove = user.eta_minutes - minETA;
-    if (timeToMove <= 15) {
-      await Notification.create({
-        userId: user._id,
-        type: "reminder",
-        message: `It's time to start moving to arrive with others.`,
-        meetingId: meetingId
-      });
-    }
-  }
-
-  res.json({
-    destination,
-    users: results
-  });
 }));
+
 
 
 
