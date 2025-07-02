@@ -549,10 +549,19 @@ const user_ids = invitedUsers
   .map(id => new mongoose.Types.ObjectId(id));
 
 
-    const destination = req.body.destination;
-    if (!destination?.lat || !destination?.lng) {
-      return res.status(400).json({ message: "Missing or invalid destination fields" });
-    }
+let destination = req.body.destination;
+if (typeof destination === "string") {
+  try {
+    destination = JSON.parse(destination);
+  } catch (e) {
+    return res.status(400).json({ message: "Invalid destination format" });
+  }
+}
+
+if (!destination?.lat || !destination?.lng) {
+  return res.status(400).json({ message: "Missing or invalid destination fields" });
+}
+
 
     const movements = await Movement.aggregate([
       { $match: { user_id: { $in: user_ids } } },
