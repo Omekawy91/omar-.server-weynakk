@@ -637,7 +637,7 @@ for (let i = 0; i < results.length; i++) {
     meetingId: meetingId
   });
 }
-}
+
     res.json({
       destination,
       users: results
