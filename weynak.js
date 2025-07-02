@@ -527,42 +527,38 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
 
 app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const currentUserId = req.user.id;
-    const { meetingId, destination, currentLocation } = req.body;
+    let { meetingId, destination, currentLocation } = req.body;
 
+    if (typeof destination === "string") {
+      try {
+        destination = JSON.parse(destination);
+      } catch (e) {
+        return res.status(400).json({ message: "Invalid destination format" });
+      }
+    }
 
-   let destination = req.body.destination;
-let currentLocation = req.body.currentLocation;
-
-if (typeof destination === "string") {
-  try {
-    destination = JSON.parse(destination);
-  } catch (e) {
-    return res.status(400).json({ message: "Invalid destination format" });
-  }
-}
-
-if (typeof currentLocation === "string") {
-  try {
-    currentLocation = JSON.parse(currentLocation);
-  } catch (e) {
-    return res.status(400).json({ message: "Invalid currentLocation format" });
-  }
-}
-
-
+    if (typeof currentLocation === "string") {
+      try {
+        currentLocation = JSON.parse(currentLocation);
+      } catch (e) {
+        return res.status(400).json({ message: "Invalid currentLocation format" });
+      }
+    }
 
     const meeting = await Meeting.findById(meetingId);
     if (!meeting) return res.status(404).json({ message: "Meeting not found" });
 
- 
     const invitedUsers = await Notification.find({ meetingId }).select("userId").lean();
     const user_ids = invitedUsers
       .map(n => n.userId)
       .filter(id => mongoose.Types.ObjectId.isValid(id))
       .map(id => new mongoose.Types.ObjectId(id));
 
-   
     const movements = await Movement.aggregate([
       { $match: { user_id: { $in: user_ids } } },
       { $sort: { createdAt: -1 } },
@@ -592,15 +588,14 @@ if (typeof currentLocation === "string") {
       }
     ]);
 
- 
     const toRad = deg => deg * (Math.PI / 180);
     const calculateETA = (from, to) => {
       const R = 6371;
       const dLat = toRad(to.lat - from.lat);
       const dLng = toRad(to.lng - from.lng);
       const a = Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
-        Math.sin(dLng / 2) ** 2;
+                Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
+                Math.sin(dLng / 2) ** 2;
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       const distanceKm = R * c;
       const speedKmh = 40;
@@ -634,7 +629,7 @@ if (typeof currentLocation === "string") {
         await Notification.create({
           userId: user._id,
           type: "reminder",
-          message: `It's time to start moving to arrive with others.`,
+          message: "It's time to start moving to arrive with others.",
           meetingId: meetingId
         });
       }
@@ -652,8 +647,6 @@ if (typeof currentLocation === "string") {
     });
   }
 }));
-
-
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
