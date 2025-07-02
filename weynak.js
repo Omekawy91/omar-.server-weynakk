@@ -633,7 +633,8 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
         type: "reminder",
         message: delayToStart === 0
           ? "Start moving now to reach with the group."
-          : Start moving in ${delayToStart} minute(s) to arrive with others.,
+        : `Start moving in ${delayToStart} minute(s) to arrive with others.`,
+
         meetingId: meetingId
       });
     }
