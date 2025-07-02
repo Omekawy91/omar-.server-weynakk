@@ -626,17 +626,16 @@ const maxETA = results[0]?.eta_minutes || 0;
 for (let i = 0; i < results.length; i++) {
   const user = results[i];
   const delayToStart = maxETA - user.eta_minutes;
+  
+await Notification.create({
+  userId: user._id,
+  type: "reminder",
+  message: delayToStart === 0
+    ? "Start moving now to reach with the group."
+    : `Start moving in ${delayToStart} minute(s) to arrive with others.`,
+  meetingId: meetingId
+});
 
-
-  await Notification.create({
-    userId: user._id,
-    type: "reminder",
-    message: delayToStart === 0
-      ? "Start moving now to reach with the group."
-      : Start moving in ${delayToStart} minute(s) to arrive with others.,
-    meetingId: meetingId
-  });
-}
 
     res.json({
       destination,
