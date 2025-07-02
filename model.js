@@ -85,13 +85,22 @@ module.exports = mongoose.model("Movement", movementSchema);
 
 const notificationSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  title: { type: String, required: true },
+  title: { type: String }, 
   message: { type: String, required: true },
   meetingId: { type: mongoose.Schema.Types.ObjectId, ref: "Meeting", required: true },
-  type: { type: String, enum: ["invitation",  "update"], required: true },
-  status: { type: String, enum: ["pending", "accepted", "rejected", ], default: "pending" },
+  type: {
+    type: String,
+    enum: ["invitation", "update", "reminder"], 
+    required: true
+  },
+  status: {
+    type: String,
+    enum: ["pending", "accepted", "rejected"],
+    default: "pending"
+  },
   delayMinutes: { type: Number, default: 0 }
 });
+
 
 
 
