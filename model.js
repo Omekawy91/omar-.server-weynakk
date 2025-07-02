@@ -51,11 +51,13 @@ const locationSchema = new mongoose.Schema({
 }, { _id: false });
 
 const movementSchema = new mongoose.Schema({
-  user_id: {
-    type: String, 
-    required: true,
-    index: true
-  },
+ user_id: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  required: true,
+  index: true
+}
+
   location: {
     type: locationSchema,
     required: true
