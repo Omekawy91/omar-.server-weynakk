@@ -532,21 +532,25 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
     const { meetingId, destination, currentLocation } = req.body;
 
 
-    if (!meetingId || !destination?.lat || !destination?.lng) {
-      return res.status(400).json({ message: "Missing or invalid data" });
-    }
+   let destination = req.body.destination;
+let currentLocation = req.body.currentLocation;
 
-  
-    if (currentLocation?.lat && currentLocation?.lng) {
-      await Movement.create({
-        user_id: currentUserId,
-        location: {
-          lat: currentLocation.lat,
-          lng: currentLocation.lng
-        },
-        status: "on_the_way"
-      });
-    }
+if (typeof destination === "string") {
+  try {
+    destination = JSON.parse(destination);
+  } catch (e) {
+    return res.status(400).json({ message: "Invalid destination format" });
+  }
+}
+
+if (typeof currentLocation === "string") {
+  try {
+    currentLocation = JSON.parse(currentLocation);
+  } catch (e) {
+    return res.status(400).json({ message: "Invalid currentLocation format" });
+  }
+}
+
 
 
     const meeting = await Meeting.findById(meetingId);
@@ -589,7 +593,7 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       }
     ]);
 
-    // 6. Calculate ETA
+ 
     const toRad = deg => deg * (Math.PI / 180);
     const calculateETA = (from, to) => {
       const R = 6371;
