@@ -529,40 +529,37 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
 app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => {
   try {
     const currentUserId = req.user.id;
-    const meetingId = req.body.meetingId;
+    const { meetingId, destination, currentLocation } = req.body;
 
-    if (!meetingId || !mongoose.Types.ObjectId.isValid(meetingId)) {
-      return res.status(400).json({ message: "Missing or invalid meetingId" });
+
+    if (!meetingId || !destination?.lat || !destination?.lng) {
+      return res.status(400).json({ message: "Missing or invalid data" });
     }
+
+  
+    if (currentLocation?.lat && currentLocation?.lng) {
+      await Movement.create({
+        user_id: currentUserId,
+        location: {
+          lat: currentLocation.lat,
+          lng: currentLocation.lng
+        },
+        status: "on_the_way"
+      });
+    }
+
 
     const meeting = await Meeting.findById(meetingId);
     if (!meeting) return res.status(404).json({ message: "Meeting not found" });
 
-    const invitedUsers = await Notification.find({ meetingId })
-      .select("userId")
-      .lean();
+ 
+    const invitedUsers = await Notification.find({ meetingId }).select("userId").lean();
+    const user_ids = invitedUsers
+      .map(n => n.userId)
+      .filter(id => mongoose.Types.ObjectId.isValid(id))
+      .map(id => new mongoose.Types.ObjectId(id));
 
-    
-const user_ids = invitedUsers
-  .map(n => n.userId)
-  .filter(id => mongoose.Types.ObjectId.isValid(id))
-  .map(id => new mongoose.Types.ObjectId(id));
-
-
-let destination = req.body.destination;
-if (typeof destination === "string") {
-  try {
-    destination = JSON.parse(destination);
-  } catch (e) {
-    return res.status(400).json({ message: "Invalid destination format" });
-  }
-}
-
-if (!destination?.lat || !destination?.lng) {
-  return res.status(400).json({ message: "Missing or invalid destination fields" });
-}
-
-
+   
     const movements = await Movement.aggregate([
       { $match: { user_id: { $in: user_ids } } },
       { $sort: { createdAt: -1 } },
@@ -592,6 +589,7 @@ if (!destination?.lat || !destination?.lng) {
       }
     ]);
 
+    // 6. Calculate ETA
     const toRad = deg => deg * (Math.PI / 180);
     const calculateETA = (from, to) => {
       const R = 6371;
@@ -629,7 +627,6 @@ if (!destination?.lat || !destination?.lng) {
     for (let i = 1; i < results.length; i++) {
       const user = results[i];
       const timeToMove = user.eta_minutes - minETA;
-
       if (timeToMove <= 15) {
         await Notification.create({
           userId: user._id,
@@ -644,7 +641,6 @@ if (!destination?.lat || !destination?.lng) {
       destination,
       users: results
     });
-
   } catch (err) {
     console.error("Group Movement Error:", err);
     res.status(500).json({
@@ -653,6 +649,7 @@ if (!destination?.lat || !destination?.lng) {
     });
   }
 }));
+
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
