@@ -619,22 +619,25 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       };
     });
 
-    results.sort((a, b) => a.eta_minutes - b.eta_minutes);
-    const minETA = results[0]?.eta_minutes || 0;
+results.sort((a, b) => b.eta_minutes - a.eta_minutes);
 
-    for (let i = 1; i < results.length; i++) {
-      const user = results[i];
-      const timeToMove = user.eta_minutes - minETA;
-      if (timeToMove <= 15) {
-        await Notification.create({
-          userId: user._id,
-          type: "reminder",
-          message: "It's time to start moving to arrive with others.",
-          meetingId: meetingId
-        });
-      }
-    }
+const maxETA = results[0]?.eta_minutes || 0; 
 
+for (let i = 0; i < results.length; i++) {
+  const user = results[i];
+  const delayToStart = maxETA - user.eta_minutes;
+
+
+  await Notification.create({
+    userId: user._id,
+    type: "reminder",
+    message: delayToStart === 0
+      ? "Start moving now to reach with the group."
+      : Start moving in ${delayToStart} minute(s) to arrive with others.,
+    meetingId: meetingId
+  });
+}
+}
     res.json({
       destination,
       users: results
