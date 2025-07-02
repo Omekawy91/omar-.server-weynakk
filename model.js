@@ -42,36 +42,45 @@ const participantSchema = new mongoose.Schema({
 const locationSchema = new mongoose.Schema({
   lat: {
     type: Number,
-    required: true
+    required: [true, "Latitude is required"],
+    min: [-90, "Latitude must be between -90 and 90"],
+    max: [90, "Latitude must be between -90 and 90"]
   },
   lng: {
     type: Number,
-    required: true
+    required: [true, "Longitude is required"],
+    min: [-180, "Longitude must be between -180 and 180"],
+    max: [180, "Longitude must be between -180 and 180"]
   }
-}, { _id: false });
-
-const movementSchema = new mongoose.Schema({
- user_id: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "User",
-  required: true,
-  index: true
-}
-
-  location: {
-    type: locationSchema,
-    required: true
-  },
-  status: {
-    type: String,
-    enum: ['on_the_way', 'arrived', 'waiting', 'left'],
-    default: 'on_the_way'
-  }
-}, {
-  timestamps: true 
 });
 
-module.exports = mongoose.model('Movement', movementSchema);
+const movementSchema = new mongoose.Schema(
+  {
+    user_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: [true, "User ID is required"],
+      index: true
+    },
+    location: {
+      type: locationSchema,
+      required: [true, "Location is required"]
+    },
+    status: {
+      type: String,
+      enum: {
+        values: ["on_the_way", "arrived", "waiting", "left"],
+        message: "Invalid status value"
+      },
+      default: "on_the_way"
+    }
+  },
+  {
+    timestamps: true
+  }
+);
+
+module.exports = mongoose.model("Movement", movementSchema);
 
 
 const notificationSchema = new mongoose.Schema({
