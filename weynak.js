@@ -525,7 +525,6 @@ app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
   res.status(201).json({ message: "Joined meeting successfully", participant });
 }));
 
-
 app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -653,6 +652,7 @@ if (typeof currentLocation === "string") {
     });
   }
 }));
+
 
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
