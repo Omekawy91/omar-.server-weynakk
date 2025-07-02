@@ -534,7 +534,8 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
 
     const meeting = await Meeting.findById(meetingId);
     if (!meeting) return res.status(404).json({ message: "Meeting not found" });
-    const user_ids = meeting.phoneNumbers.map(id => new mongoose.Types.ObjectId(id));
+   const invitedUsers = await Notification.find({ meetingId }).select("userId").lean();
+    const user_ids = invitedUsers.map(n => n.userId);
     const destination = req.body.destination;
 
     if (!destination?.lat || !destination?.lng) {
