@@ -542,10 +542,12 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       .select("userId")
       .lean();
 
-    const user_ids = invitedUsers
-      .map(n => n.userId)
-      .filter(id => mongoose.Types.ObjectId.isValid(id))
-      .map(id => mongoose.Types.ObjectId(id));
+    
+const user_ids = invitedUsers
+  .map(n => n.userId)
+  .filter(id => mongoose.Types.ObjectId.isValid(id))
+  .map(id => new mongoose.Types.ObjectId(id));
+
 
     const destination = req.body.destination;
     if (!destination?.lat || !destination?.lng) {
