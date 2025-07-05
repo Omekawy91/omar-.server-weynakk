@@ -513,17 +513,17 @@ app.get("/meetings/user", authenticateToken, asyncHandler(async (req, res) => {
   res.json(meetings);
 }));
 
-app.post("/participants", authenticateToken, asyncHandler(async (req, res) => {
+app.post("/participants/approved", authenticateToken, asyncHandler(async (req, res) => {
   const { meeting_id } = req.body;
+
   if (!meeting_id) return res.status(400).json({ message: "Meeting ID is required" });
 
-  const participantExists = await Participant.findOne({ meeting_id, user_id: req.user.id });
-  if (participantExists) return res.status(400).json({ message: "Already joined this meeting" });
+  const participants = await Participant.find({ meeting_id, approved: true })
+    .populate("user_id", "username email");
 
-  const participant = new Participant({ meeting_id, user_id: req.user.id, approved: false });
-  await participant.save();
-  res.status(201).json({ message: "Joined meeting successfully", participant });
+  res.status(200).json({ participants });
 }));
+
 
 app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => {
   try {
