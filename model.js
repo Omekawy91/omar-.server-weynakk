@@ -13,10 +13,7 @@ const meetingSchema = new mongoose.Schema({
   meetingname: String,
   date: String,
   time: String,
-  duration: {
-    type: Number,
-    default: 60
-  },
+  duration: { type: Number, default: 60 },
   phoneNumbers: [String],
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   isPublic: Boolean,
@@ -32,7 +29,6 @@ const meetingSchema = new mongoose.Schema({
   acceptedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }]
 });
 
-
 const participantSchema = new mongoose.Schema({
   meeting_id: mongoose.Schema.Types.ObjectId,
   user_id: mongoose.Schema.Types.ObjectId,
@@ -42,73 +38,69 @@ const participantSchema = new mongoose.Schema({
 const locationSchema = new mongoose.Schema({
   lat: {
     type: Number,
-    required: [true, "Latitude is required"],
-    min: [-90, "Latitude must be between -90 and 90"],
-    max: [90, "Latitude must be between -90 and 90"]
+    required: true,
+    min: -90,
+    max: 90
   },
   lng: {
     type: Number,
-    required: [true, "Longitude is required"],
-    min: [-180, "Longitude must be between -180 and 180"],
-    max: [180, "Longitude must be between -180 and 180"]
+    required: true,
+    min: -180,
+    max: 180
   }
 });
 
-const movementSchema = new mongoose.Schema(
-  {
-    user_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: [true, "User ID is required"],
-      index: true
-    },
-    location: {
-      type: locationSchema,
-      required: [true, "Location is required"]
-    },
-    status: {
-      type: String,
-      enum: {
-        values: ["on_the_way", "arrived", "waiting", "left"],
-        message: "Invalid status value"
-      },
-      default: "on_the_way"
-    }
+const movementSchema = new mongoose.Schema({
+  user_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+    index: true
   },
-  {
-    timestamps: true
-  }
-);
-
-module.exports = mongoose.model("Movement", movementSchema);
-
-
-const notificationSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  title: { type: String }, 
-  message: { type: String, required: true },
-  meetingId: { type: mongoose.Schema.Types.ObjectId, ref: "Meeting", required: true },
-  type: {
-    type: String,
-    enum: ["invitation", "update", "reminder"], 
+  location: {
+    type: locationSchema,
     required: true
   },
   status: {
     type: String,
-    enum: ["pending", "accepted", "rejected"],
-    default: "pending"
-  },
+    enum: ["on_the_way", "arrived", "waiting", "left"],
+    default: "on_the_way"
+  }
+}, {
+  timestamps: true
+});
+
+const notificationSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  title: { type: String },
+  message: { type: String, required: true },
+  meetingId: { type: mongoose.Schema.Types.ObjectId, ref: "Meeting", required: true },
+  type: { type: String, enum: ["invitation", "update", "reminder"], required: true },
+  status: { type: String, enum: ["pending", "accepted", "rejected"], default: "pending" },
   delayMinutes: { type: Number, default: 0 }
 });
 
+const userMovementSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  current_location: { type: locationSchema, required: true },
+  eta_minutes: { type: Number, default: 0 },
+  lastUpdated: { type: Date, default: Date.now },
+  hasMoved: { type: Boolean, default: false }
+});
 
-
+const groupMovementSchema = new mongoose.Schema({
+  meetingId: { type: mongoose.Schema.Types.ObjectId, ref: "Meeting", required: true, unique: true },
+  destination: { type: locationSchema, required: true },
+  users: [userMovementSchema]
+}, {
+  timestamps: true
+});
 
 const User = mongoose.model("User", userSchema);
 const Meeting = mongoose.model("Meeting", meetingSchema);
 const Participant = mongoose.model("Participant", participantSchema);
 const Movement = mongoose.model("Movement", movementSchema);
 const Notification = mongoose.model("Notification", notificationSchema);
+const GroupMovement = mongoose.model("GroupMovement", groupMovementSchema);
 
-
-module.exports = { User, Meeting, Participant, Movement, Notification };
+module.exports = { User, Meeting, Participant, Movement, Notification, GroupMovement };
