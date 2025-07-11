@@ -29,37 +29,35 @@ const meetingSchema = new mongoose.Schema({
   acceptedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }]
 });
 
-const participantSchema = new mongoose.Schema({
-  meeting_id: mongoose.Schema.Types.ObjectId,
-  user_id: mongoose.Schema.Types.ObjectId,
-  approved: Boolean
-});
-
-const locationSchema = new mongoose.Schema({
-  lat: {
-    type: Number,
-    required: true,
-    min: -90,
-    max: 90
-  },
-  lng: {
-    type: Number,
-    required: true,
-    min: -180,
-    max: 180
-  }
-});
-
 const movementSchema = new mongoose.Schema({
+  meeting_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Meeting",
+    required: true
+  },
   user_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true,
     index: true
   },
+  approved: {
+    type: Boolean,
+    default: false
+  },
   location: {
-    type: locationSchema,
-    required: true
+    lat: {
+      type: Number,
+      required: true,
+      min: -90,
+      max: 90
+    },
+    lng: {
+      type: Number,
+      required: true,
+      min: -180,
+      max: 180
+    }
   },
   status: {
     type: String,
@@ -75,14 +73,27 @@ const notificationSchema = new mongoose.Schema({
   title: { type: String },
   message: { type: String, required: true },
   meetingId: { type: mongoose.Schema.Types.ObjectId, ref: "Meeting", required: true },
-  type: { type: String, enum: ["invitation", "update", "reminder"], required: true },
+  type: { type: String, enum: ["invitation", "update"], required: true },
   status: { type: String, enum: ["pending", "accepted", "rejected"], default: "pending" },
   delayMinutes: { type: Number, default: 0 }
 });
 
 const userMovementSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  current_location: { type: locationSchema, required: true },
+  current_location: {
+    lat: {
+      type: Number,
+      required: true,
+      min: -90,
+      max: 90
+    },
+    lng: {
+      type: Number,
+      required: true,
+      min: -180,
+      max: 180
+    }
+  },
   eta_minutes: { type: Number, default: 0 },
   lastUpdated: { type: Date, default: Date.now },
   hasMoved: { type: Boolean, default: false }
@@ -90,7 +101,20 @@ const userMovementSchema = new mongoose.Schema({
 
 const groupMovementSchema = new mongoose.Schema({
   meetingId: { type: mongoose.Schema.Types.ObjectId, ref: "Meeting", required: true, unique: true },
-  destination: { type: locationSchema, required: true },
+  destination: {
+    lat: {
+      type: Number,
+      required: true,
+      min: -90,
+      max: 90
+    },
+    lng: {
+      type: Number,
+      required: true,
+      min: -180,
+      max: 180
+    }
+  },
   users: [userMovementSchema]
 }, {
   timestamps: true
@@ -98,9 +122,9 @@ const groupMovementSchema = new mongoose.Schema({
 
 const User = mongoose.model("User", userSchema);
 const Meeting = mongoose.model("Meeting", meetingSchema);
-const Participant = mongoose.model("Participant", participantSchema);
 const Movement = mongoose.model("Movement", movementSchema);
 const Notification = mongoose.model("Notification", notificationSchema);
 const GroupMovement = mongoose.model("GroupMovement", groupMovementSchema);
 
-module.exports = { User, Meeting, Participant, Movement, Notification, GroupMovement };
+module.exports = { User, Meeting, Movement, Notification, GroupMovement };
+
