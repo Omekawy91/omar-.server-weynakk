@@ -514,114 +514,142 @@ app.get("/meetings/user", authenticateToken, asyncHandler(async (req, res) => {
   res.json(meetings);
 }));
 
-app.post("/participants/approved", authenticateToken, asyncHandler(async (req, res) => {
-  const { meeting_id } = req.body;
-
-  if (!meeting_id) return res.status(400).json({ message: "Meeting ID is required" });
-
-  const participants = await Participant.find({ meeting_id, approved: true })
-    .populate("user_id", "username email");
-
-  res.status(200).json({ participants });
-}));
-
-
 app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => {
   try {
     const { meetingId, destination, currentLocation } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.id; // ID of the current logged-in user
 
-    if (!meetingId || !destination || !currentLocation) {
+    if (!meetingId  !destination  !currentLocation) { // تم تصحيح الأخطاء المطبعية هنا
       return res.status(400).json({ message: "Missing required fields" });
     }
 
     const parsedDestination = typeof destination === "string" ? JSON.parse(destination) : destination;
     const parsedCurrentLocation = typeof currentLocation === "string" ? JSON.parse(currentLocation) : currentLocation;
 
-    // تحديث موقع المستخدم داخل مجموعة الحركة
+    // 1. تحديث موقع المستخدم داخل مجموعة الحركة
     let group = await GroupMovement.findOneAndUpdate(
       { meetingId, "users.userId": userId },
       {
         $set: {
-          "destination": parsedDestination,
+          "destination": parsedDestination, // تحديث الوجهة أيضاً
           "users.$.current_location": parsedCurrentLocation,
           "users.$.lastUpdated": new Date(),
           "users.$.hasMoved": true,
         }
       },
-      { new: true }
+      { new: true } // Return the updated document
     );
 
-    // لو المستخدم مش موجود جوه users array
-    if (!group || !group.users.some(u => u.userId.toString() === userId)) {
+    // 2. لو المستخدم مش موجود جوه users array، قم بإضافته
+    if (!group  !group.users.some(u => u.userId.toString() === userId)) {
       group = await GroupMovement.findOneAndUpdate(
         { meetingId },
         {
-          $set: { destination: parsedDestination },
+          $set: { destination: parsedDestination }, // تأكد من تحديث الوجهة هنا أيضاً
           $push: {
             users: {
               userId,
               current_location: parsedCurrentLocation,
               lastUpdated: new Date(),
               hasMoved: true,
-              eta_minutes: 0
+              eta_minutes: 0 // قيمة افتراضية للـ ETA
             }
           }
         },
-        { new: true, upsert: true }
+        { new: true, upsert: true } // Return the updated document, create if not exists
       );
     }
 
-    // حساب ETA لكل مستخدم
+    // 3. حساب ETA (دالة مساعدة)
     const toRad = deg => deg * (Math.PI / 180);
     const calculateETA = (from, to) => {
-      const R = 6371;
+      const R = 6371; // Radius of Earth in kilometers
       const dLat = toRad(to.lat - from.lat);
       const dLng = toRad(to.lng - from.lng);
-      const a = Math.sin(dLat / 2) ** 2 +
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + // تم تصحيح ** 2
                 Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
-                Math.sin(dLng / 2) ** 2;
+                Math.sin(dLng / 2) * Math.sin(dLng / 2); // تم تصحيح ** 2
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       const distanceKm = R * c;
-      const speedKmh = 40;
+      const speedKmh = 40; // متوسط سرعة افتراضي بالكيلومتر في الساعة
       const timeMinutes = (distanceKm / speedKmh) * 60;
       return Math.round(timeMinutes);
     };
 
-    // تحديث كل ETA + إرسال إشعار لكل مستخدم
-    let maxETA = 0;
-    for (const user of group.users) {
-      const eta = calculateETA(user.current_location, parsedDestination);
-      user.eta_minutes = eta;
-      maxETA = Math.max(maxETA, eta);
+    // 4. جلب المشاركين الموافق عليهم
+    const participants = await Participant.find({ meeting_id: meetingId, approved: true });
+    const approvedUserIds = participants.map(p => p.user_id.toString());
+
+    // 5. جلب مستند GroupMovement بالكامل مع populated users
+    const populatedGroupMovement = await GroupMovement.findOne({ meetingId }).populate({
+      path: "users.userId",
+      select: "name" // <--- تصحيح: "name" بدلاً من "username"
+    });
+
+    if (!populatedGroupMovement) {
+      return res.status(404).json({ message: 'Meeting movement data not found.' });
     }
 
-    await group.save();
+    // 6. إزالة السجلات المكررة والحصول على أحدث موقع فريد لكل مستخدم
+    const uniqueUsersMap = new Map(); // Map لتخزين أحدث سجل لكل userId
+    for (const userEntry of populatedGroupMovement.users) {
+        const userIdString = userEntry.userId._id.toString();
+        // إذا كان السجل موجوداً بالفعل في الـ Map، قارن التواريخ واحتفظ بالأحدث
+        if (!uniqueUsersMap.has(userIdString)  (userEntry.lastUpdated && uniqueUsersMap.get(userIdString).lastUpdated && userEntry.lastUpdated > uniqueUsersMap.get(userIdString).lastUpdated)) {
+            uniqueUsersMap.set(userIdString, userEntry);
+        }
+    }
+    const uniqueAndLatestUsers = Array.from(uniqueUsersMap.values());
 
-    // إرسال إشعارات بناءً على فارق الوقت
-    for (const user of group.users) {
-      const delayToStart = maxETA - user.eta_minutes;
+    // 7. فلترة المستخدمين الذين تمت الموافقة عليهم فقط
+    const filteredAndApprovedUsers = uniqueAndLatestUsers.filter(u => approvedUserIds.includes(u.userId._id.toString()));
+// 8. حساب ETA لكل مستخدم (أصبح يعمل على القائمة المفلترة والفريدة)
+    let finalMaxETA = 0;
+    for (const user of filteredAndApprovedUsers) {
+      // تأكد أن destination.lat و destination.lng موجودين
+      if (parsedDestination && parsedDestination.lat != null && parsedDestination.lng != null) {
+        const eta = calculateETA(user.current_location, parsedDestination);
+        user.eta_minutes = eta;
+        finalMaxETA = Math.max(finalMaxETA, eta);
+      } else {
+        user.eta_minutes = 0; // أو قيمة افتراضية أخرى لو الوجهة غير متاحة
+      }
+    }
+
+    // 9. تحديث ETA في قاعدة البيانات (مهم جداً)
+    const bulkOps = filteredAndApprovedUsers.map(user => ({
+      updateOne: {
+        filter: { meetingId, "users.userId": user.userId._id },
+        update: { "$set": { "users.$.eta_minutes": user.eta_minutes } }
+      }
+    }));
+
+    if (bulkOps.length > 0) {
+      await GroupMovement.bulkWrite(bulkOps);
+    }
+
+    // 10. إرسال إشعارات بناءً على الفارق (معلق افتراضياً لمنع التكرار المفرط)
+
+    for (const user of filteredAndApprovedUsers) {
+      const delayToStart = finalMaxETA - user.eta_minutes;
       const message = delayToStart === 0
         ? "Start moving now to reach with the group."
-        : `Start moving in ${delayToStart} minute(s) to arrive with others.`;
+        : Start moving in ${delayToStart} minute(s) to arrive with others.;
 
       await Notification.create({
-        userId: user.userId,
+        userId: user.userId._id,
         type: "reminder",
+        title: "Meeting Reminder", // أضف عنوان للإشعار
         message,
         meetingId
       });
     }
+    */
 
-    // تحضير البيانات للواجهة
-    const populated = await GroupMovement.findOne({ meetingId }).populate({
-      path: "users.userId",
-      select: "username"
-    });
-
-    const result = populated.users.map(u => ({
+    // 11. تحضير البيانات للواجهة (أصبح يعمل على القائمة النهائية بعد الفلترة وإزالة التكرار)
+    const result = filteredAndApprovedUsers.map(u => ({
       _id: u.userId._id,
-      username: u.userId.username,
+      name: u.userId.name, // <--- تصحيح: "name" بدلاً من "username"
       current_location: u.current_location,
       eta_minutes: u.eta_minutes,
       last_updated: u.lastUpdated,
@@ -629,8 +657,8 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
     }));
 
     res.status(200).json({
-      destination: populated.destination,
-      users: result
+      destination: populatedGroupMovement.destination,
+      users: result // هذه القائمة ستكون فريدة وتحتوي على جميع المستخدمين الموافق عليهم
     });
 
   } catch (err) {
@@ -638,8 +666,7 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 }));
-
-
+    
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
