@@ -6,11 +6,10 @@ const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const asyncHandler = require("express-async-handler");
-const { User, Meeting, Participant, Movement, Notification, GroupMovement } = require("./model");
-
+const { User, Meeting, Participant, Movement, Notification } = require("./model");
 
 const app = express();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -327,7 +326,7 @@ if (phoneNumbers && phoneNumbers.length > 0) {
     const notification = new Notification({
       userId: user._id,
       title: "Meeting Invitation",
-      message: `${req.user.name} invited you to ${meeting.meetingname}`,
+     message: `${req.user.name} invited you to ${meeting.meetingname}`,
 
       meetingId: meeting._id,
       type: "invitation",
@@ -420,6 +419,7 @@ app.get("/meetings/today", authenticateToken, asyncHandler(async (req, res) => {
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0]; 
 
+
   const acceptedNotifications = await Notification.find({
     userId: req.user.id,
     type: "invitation",
@@ -462,7 +462,7 @@ app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
 
   const acceptedMeetingIds = acceptedNotifications.map(n => n.meetingId);
 
-    const meetings = await Meeting.find({
+   const meetings = await Meeting.find({
     _id: { $in: acceptedMeetingIds }
   });
 
@@ -470,7 +470,7 @@ app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
 }));
 
 
-  
+ 
 app.post("/meetings/delete", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingId } = req.body;
   const userId = req.user.id;
@@ -527,51 +527,67 @@ app.post("/participants/approved", authenticateToken, asyncHandler(async (req, r
 
 app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => {
   try {
-    const { meetingId, destination, currentLocation } = req.body;
-    const userId = req.user.id;
-
-    if (!meetingId || !destination || !currentLocation) {
-      return res.status(400).json({ message: "Missing required fields" });
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const parsedDestination = typeof destination === "string" ? JSON.parse(destination) : destination;
-    const parsedCurrentLocation = typeof currentLocation === "string" ? JSON.parse(currentLocation) : currentLocation;
+    const currentUserId = req.user.id;
+    let { meetingId, destination, currentLocation } = req.body;
 
-    // تحديث موقع المستخدم داخل مجموعة الحركة
-    let group = await GroupMovement.findOneAndUpdate(
-      { meetingId, "users.userId": userId },
+    if (typeof destination === "string") {
+      try {
+        destination = JSON.parse(destination);
+      } catch (e) {
+        return res.status(400).json({ message: "Invalid destination format" });
+      }
+    }
+
+    if (typeof currentLocation === "string") {
+      try {
+        currentLocation = JSON.parse(currentLocation);
+      } catch (e) {
+        return res.status(400).json({ message: "Invalid currentLocation format" });
+      }
+    }
+
+    const meeting = await Meeting.findById(meetingId);
+    if (!meeting) return res.status(404).json({ message: "Meeting not found" });
+
+    const invitedUsers = await Notification.find({ meetingId }).select("userId").lean();
+    const user_ids = invitedUsers
+      .map(n => n.userId)
+      .filter(id => mongoose.Types.ObjectId.isValid(id))
+      .map(id => new mongoose.Types.ObjectId(id));
+
+    const movements = await Movement.aggregate([
+      { $match: { user_id: { $in: user_ids } } },
+      { $sort: { createdAt: -1 } },
       {
-        $set: {
-          "destination": parsedDestination,
-          "users.$.current_location": parsedCurrentLocation,
-          "users.$.lastUpdated": new Date(),
-          "users.$.hasMoved": true,
+        $group: {
+          _id: "$user_id",
+          location: { $first: "$location" },
+          updatedAt: { $first: "$createdAt" }
         }
       },
-      { new: true }
-    );
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "user"
+        }
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          _id: 1,
+          username: "$user.username",
+          location: 1,
+          updatedAt: 1
+        }
+      }
+    ]);
 
-    // لو المستخدم مش موجود جوه users array
-    if (!group || !group.users.some(u => u.userId.toString() === userId)) {
-      group = await GroupMovement.findOneAndUpdate(
-        { meetingId },
-        {
-          $set: { destination: parsedDestination },
-          $push: {
-            users: {
-              userId,
-              current_location: parsedCurrentLocation,
-              lastUpdated: new Date(),
-              hasMoved: true,
-              eta_minutes: 0
-            }
-          }
-        },
-        { new: true, upsert: true }
-      );
-    }
-
-    // حساب ETA لكل مستخدم
     const toRad = deg => deg * (Math.PI / 180);
     const calculateETA = (from, to) => {
       const R = 6371;
@@ -584,59 +600,60 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       const distanceKm = R * c;
       const speedKmh = 40;
       const timeMinutes = (distanceKm / speedKmh) * 60;
-      return Math.round(timeMinutes);
+      return {
+        etaMinutes: Math.round(timeMinutes),
+        distanceKm
+      };
     };
 
-    // تحديث كل ETA + إرسال إشعار لكل مستخدم
-    let maxETA = 0;
-    for (const user of group.users) {
-      const eta = calculateETA(user.current_location, parsedDestination);
-      user.eta_minutes = eta;
-      maxETA = Math.max(maxETA, eta);
-    }
+    const results = movements.map(user => {
+      const { etaMinutes, distanceKm } = calculateETA(user.location, destination);
+      const hasMoved = distanceKm > 0.1;
+      return {
+        _id: user._id,
+        username: user.username,
+        current_location: user.location,
+        eta_minutes: etaMinutes,
+        last_updated: user.updatedAt,
+        hasMoved
+      };
+    });
 
-    await group.save();
+  
+    results.sort((a, b) => b.eta_minutes - a.eta_minutes);
 
-    // إرسال إشعارات بناءً على فارق الوقت
-    for (const user of group.users) {
+    const maxETA = results[0]?.eta_minutes || 0;
+
+    for (let i = 0; i < results.length; i++) {
+      const user = results[i];
       const delayToStart = maxETA - user.eta_minutes;
-      const message = delayToStart === 0
-        ? "Start moving now to reach with the group."
-        : `Start moving in ${delayToStart} minute(s) to arrive with others.`;
 
       await Notification.create({
-        userId: user.userId,
+        userId: user._id,
         type: "reminder",
-        message,
-        meetingId
+        message: delayToStart === 0
+          ? "Start moving now to reach with the group."
+        : `Start moving in ${delayToStart} minute(s) to arrive with others.`,
+
+        meetingId: meetingId
       });
     }
 
-    // تحضير البيانات للواجهة
-    const populated = await GroupMovement.findOne({ meetingId }).populate({
-      path: "users.userId",
-      select: "username"
-    });
-
-    const result = populated.users.map(u => ({
-      _id: u.userId._id,
-      username: u.userId.username,
-      current_location: u.current_location,
-      eta_minutes: u.eta_minutes,
-      last_updated: u.lastUpdated,
-      hasMoved: u.hasMoved
-    }));
-
-    res.status(200).json({
-      destination: populated.destination,
-      users: result
+   
+    res.json({
+      destination,
+      users: results
     });
 
   } catch (err) {
     console.error("Group Movement Error:", err);
-    res.status(500).json({ message: "Server Error", error: err.message });
+    res.status(500).json({
+      message: "Server Error",
+      error: err.message
+    });
   }
 }));
+
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
