@@ -538,21 +538,19 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
     const parsedDestination = typeof destination === "string" ? JSON.parse(destination) : destination;
     const parsedCurrentLocation = typeof currentLocation === "string" ? JSON.parse(currentLocation) : currentLocation;
 
-    // تحديث موقع المستخدم داخل مجموعة الحركة
     let group = await GroupMovement.findOneAndUpdate(
       { meetingId, "users.userId": userId },
       {
         $set: {
-          "destination": parsedDestination,
+          destination: parsedDestination,
           "users.$.current_location": parsedCurrentLocation,
           "users.$.lastUpdated": new Date(),
-          "users.$.hasMoved": true,
+          "users.$.hasMoved": true
         }
       },
       { new: true }
     );
 
-    // لو المستخدم مش موجود جوه users array
     if (!group || !group.users.some(u => u.userId.toString() === userId)) {
       group = await GroupMovement.findOneAndUpdate(
         { meetingId },
@@ -572,7 +570,6 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       );
     }
 
-    // حساب ETA لكل مستخدم
     const toRad = deg => deg * (Math.PI / 180);
     const calculateETA = (from, to) => {
       const R = 6371;
@@ -588,7 +585,6 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       return Math.round(timeMinutes);
     };
 
-    // تحديث كل ETA + إرسال إشعار لكل مستخدم
     let maxETA = 0;
     for (const user of group.users) {
       const eta = calculateETA(user.current_location, parsedDestination);
@@ -598,30 +594,32 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
 
     await group.save();
 
-    // إرسال إشعارات بناءً على فارق الوقت
-    for (const user of group.users) {
-      const delayToStart = maxETA - user.eta_minutes;
-      const message = delayToStart === 0
-        ? "Start moving now to reach with the group."
-        : `Start moving in ${delayToStart} minute(s) to arrive with others.`;
+  //  for (const user of group.users) {
+   //   const delayToStart = maxETA - user.eta_minutes;
 
-      await Notification.create({
-        userId: user.userId,
-        type: "reminder",
-        message,
-        meetingId
-      });
-    }
+   //   if (delayToStart === 0) continue;
 
-    // تحضير البيانات للواجهة
+  //    const message = `Start moving in ${delayToStart} minute(s) to arrive with others.`;
+
+ //     await Notification.create({
+  //      userId: user.userId,
+  //      type: "reminder",
+  //      title: "Meeting Reminder",
+ //       message,
+  //      meetingId,
+  //      delayMinutes: delayToStart,
+  //      status: "pending"
+  //    });
+   // }
+
     const populated = await GroupMovement.findOne({ meetingId }).populate({
       path: "users.userId",
-      select: "username"
+      select: "name"
     });
 
     const result = populated.users.map(u => ({
       _id: u.userId._id,
-      username: u.userId.username,
+      name: u.userId.name,
       current_location: u.current_location,
       eta_minutes: u.eta_minutes,
       last_updated: u.lastUpdated,
