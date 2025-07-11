@@ -531,39 +531,28 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
     const userId = req.user.id;
 
     if (!meetingId || !destination || !currentLocation) {
-      return res.status(400).json({ message: "Missing required fields: meetingId, destination, or currentLocation." });
+      return res.status(400).json({ message: "Missing required fields" });
     }
 
-    let parsedDestination, parsedCurrentLocation;
-    try {
-      parsedDestination = typeof destination === "string" ? JSON.parse(destination) : destination;
-      parsedCurrentLocation = typeof currentLocation === "string" ? JSON.parse(currentLocation) : currentLocation;
+    const parsedDestination = typeof destination === "string" ? JSON.parse(destination) : destination;
+    const parsedCurrentLocation = typeof currentLocation === "string" ? JSON.parse(currentLocation) : currentLocation;
 
-      if (
-        !parsedDestination || parsedDestination.lat == null || parsedDestination.lng == null ||
-        !parsedCurrentLocation || parsedCurrentLocation.lat == null || parsedCurrentLocation.lng == null
-      ) {
-        return res.status(400).json({ message: "Invalid location format: lat or lng is missing." });
-      }
-
-    } catch (parseErr) {
-      return res.status(400).json({ message: "Invalid location format: Could not parse JSON.", error: parseErr.message });
-    }
-
+    // تحديث موقع المستخدم داخل مجموعة الحركة
     let group = await GroupMovement.findOneAndUpdate(
       { meetingId, "users.userId": userId },
       {
         $set: {
-          destination: parsedDestination,
+          "destination": parsedDestination,
           "users.$.current_location": parsedCurrentLocation,
           "users.$.lastUpdated": new Date(),
-          "users.$.hasMoved": true
+          "users.$.hasMoved": true,
         }
       },
       { new: true }
     );
 
-    if (!group || !group.users.some(u => u.userId.toString() === userId.toString())) {
+    // لو المستخدم مش موجود جوه users array
+    if (!group || !group.users.some(u => u.userId.toString() === userId)) {
       group = await GroupMovement.findOneAndUpdate(
         { meetingId },
         {
@@ -582,71 +571,64 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       );
     }
 
-    if (!group) {
-      return res.status(500).json({ message: "Failed to find or create group movement record." });
-    }
-
+    // حساب ETA لكل مستخدم
     const toRad = deg => deg * (Math.PI / 180);
-
     const calculateETA = (from, to) => {
       const R = 6371;
       const dLat = toRad(to.lat - from.lat);
       const dLng = toRad(to.lng - from.lng);
-
       const a = Math.sin(dLat / 2) ** 2 +
                 Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
                 Math.sin(dLng / 2) ** 2;
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       const distanceKm = R * c;
-
       const speedKmh = 40;
       const timeMinutes = (distanceKm / speedKmh) * 60;
       return Math.round(timeMinutes);
     };
 
+    // تحديث كل ETA + إرسال إشعار لكل مستخدم
     let maxETA = 0;
-
     for (const user of group.users) {
-      if (
-        user.current_location &&
-        user.current_location.lat != null &&
-        user.current_location.lng != null &&
-        group.destination &&
-        group.destination.lat != null &&
-        group.destination.lng != null
-      ) {
-        const eta = calculateETA(user.current_location, group.destination);
-        user.eta_minutes = eta;
-        maxETA = Math.max(maxETA, eta);
-      } else {
-        user.eta_minutes = 0;
-      }
+      const eta = calculateETA(user.current_location, parsedDestination);
+      user.eta_minutes = eta;
+      maxETA = Math.max(maxETA, eta);
     }
 
     await group.save();
 
-    const populatedGroup = await group.populate({
-      path: "users.userId",
-      select: "name"
-    });
+    // إرسال إشعارات بناءً على فارق الوقت
+    for (const user of group.users) {
+      const delayToStart = maxETA - user.eta_minutes;
+      const message = delayToStart === 0
+        ? "Start moving now to reach with the group."
+        : `Start moving in ${delayToStart} minute(s) to arrive with others.`;
 
-    if (!populatedGroup) {
-      return res.status(500).json({ message: "Failed to populate user data for group movement." });
+      await Notification.create({
+        userId: user.userId,
+        type: "reminder",
+        message,
+        meetingId
+      });
     }
 
-    const result = populatedGroup.users
-      .filter(u => u.userId && u.userId._id && u.current_location)
-      .map(u => ({
-        _id: u.userId._id,
-        name: u.userId.name,
-        current_location: u.current_location,
-        eta_minutes: u.eta_minutes,
-        last_updated: u.lastUpdated,
-        hasMoved: u.hasMoved
-      }));
+    // تحضير البيانات للواجهة
+    const populated = await GroupMovement.findOne({ meetingId }).populate({
+      path: "users.userId",
+      select: "username"
+    });
+
+    const result = populated.users.map(u => ({
+      _id: u.userId._id,
+      username: u.userId.username,
+      current_location: u.current_location,
+      eta_minutes: u.eta_minutes,
+      last_updated: u.lastUpdated,
+      hasMoved: u.hasMoved
+    }));
 
     res.status(200).json({
-      destination: populatedGroup.destination,
+      destination: populated.destination,
       users: result
     });
 
