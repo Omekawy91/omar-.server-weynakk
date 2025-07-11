@@ -626,16 +626,20 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
 
     for (const user of filteredAndApprovedUsers) {
       const delayToStart = finalMaxETA - user.eta_minutes;
-      const message = delayToStart === 0
-        ? "Start moving now to reach with the group."
-        : `Start moving in ${delayToStart} minute(s) to arrive with others.`;
+
+      // ✅ لو delay = 0 معناها هو آخر واحد يتحرك، مش هيبعتله إشعار
+      if (delayToStart === 0) continue;
+
+      const message = `Start moving in ${delayToStart} minute(s) to arrive with others.`;
 
       await Notification.create({
         userId: user.userId._id,
         type: "reminder",
         title: "Meeting Reminder",
         message,
-        meetingId
+        meetingId,
+        delayMinutes: delayToStart,
+        status: "pending"
       });
     }
 
@@ -658,6 +662,7 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 }));
+
 
     
 const server = app.listen(port, () => {
