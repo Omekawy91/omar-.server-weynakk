@@ -35,21 +35,6 @@ const participantSchema = new mongoose.Schema({
   approved: Boolean
 });
 
-const locationSchema = new mongoose.Schema({
-  lat: {
-    type: Number,
-    required: true,
-    min: -90,
-    max: 90
-  },
-  lng: {
-    type: Number,
-    required: true,
-    min: -180,
-    max: 180
-  }
-});
-
 const userMovementSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   current_location: {
@@ -102,12 +87,16 @@ const notificationSchema = new mongoose.Schema({
   delayMinutes: { type: Number, default: 0 }
 });
 
-
 const User = mongoose.model("User", userSchema);
 const Meeting = mongoose.model("Meeting", meetingSchema);
 const Participant = mongoose.model("Participant", participantSchema);
-const Movement = mongoose.model("Movement", movementSchema);
 const Notification = mongoose.model("Notification", notificationSchema);
 const GroupMovement = mongoose.model("GroupMovement", groupMovementSchema);
 
-module.exports = { User, Meeting, Participant, Movement, Notification, GroupMovement };    
+module.exports = {
+  User,
+  Meeting,
+  Participant,
+  Notification,
+  GroupMovement
+};
