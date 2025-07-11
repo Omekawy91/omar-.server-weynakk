@@ -535,9 +535,16 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const parsedDestination = typeof destination === "string" ? JSON.parse(destination) : destination;
-    const parsedCurrentLocation = typeof currentLocation === "string" ? JSON.parse(currentLocation) : currentLocation;
+    // Parse destination and currentLocation safely
+    let parsedDestination, parsedCurrentLocation;
+    try {
+      parsedDestination = typeof destination === "string" ? JSON.parse(destination) : destination;
+      parsedCurrentLocation = typeof currentLocation === "string" ? JSON.parse(currentLocation) : currentLocation;
+    } catch (parseErr) {
+      return res.status(400).json({ message: "Invalid location format", error: parseErr.message });
+    }
 
+    // Update group movement
     let group = await GroupMovement.findOneAndUpdate(
       { meetingId, "users.userId": userId },
       {
@@ -551,6 +558,7 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       { new: true }
     );
 
+    // If user not found in users array, push new
     if (!group || !group.users.some(u => u.userId.toString() === userId)) {
       group = await GroupMovement.findOneAndUpdate(
         { meetingId },
@@ -570,6 +578,11 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       );
     }
 
+    if (!group) {
+      return res.status(404).json({ message: "Group movement not found or could not be created." });
+    }
+
+    // Helper functions
     const toRad = deg => deg * (Math.PI / 180);
     const calculateETA = (from, to) => {
       const R = 6371;
@@ -605,13 +618,18 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
 
     await group.save();
 
+    // Populate and prepare response
     const populated = await GroupMovement.findOne({ meetingId }).populate({
       path: "users.userId",
       select: "name"
     });
 
+    if (!populated) {
+      return res.status(404).json({ message: "Group movement not found after update." });
+    }
+
     const result = populated.users
-      .filter(u => u.userId && u.current_location && u.current_location.lat != null && u.current_location.lng != null)
+      .filter(u => u.userId && u.userId._id && u.current_location)
       .map(u => ({
         _id: u.userId._id,
         name: u.userId.name,
@@ -631,6 +649,7 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 }));
+
 
     
 const server = app.listen(port, () => {
