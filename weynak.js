@@ -327,7 +327,7 @@ if (phoneNumbers && phoneNumbers.length > 0) {
     const notification = new Notification({
       userId: user._id,
       title: "Meeting Invitation",
-     message: `${req.user.name} invited you to ${meeting.meetingname}`,
+      message: `${req.user.name} invited you to ${meeting.meetingname}`,
 
       meetingId: meeting._id,
       type: "invitation",
@@ -420,7 +420,6 @@ app.get("/meetings/today", authenticateToken, asyncHandler(async (req, res) => {
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0]; 
 
-
   const acceptedNotifications = await Notification.find({
     userId: req.user.id,
     type: "invitation",
@@ -463,7 +462,7 @@ app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
 
   const acceptedMeetingIds = acceptedNotifications.map(n => n.meetingId);
 
-   const meetings = await Meeting.find({
+    const meetings = await Meeting.find({
     _id: { $in: acceptedMeetingIds }
   });
 
@@ -471,7 +470,7 @@ app.get("/my-meetings", authenticateToken, asyncHandler(async (req, res) => {
 }));
 
 
- 
+  
 app.post("/meetings/delete", authenticateToken, asyncHandler(async (req, res) => {
   const { meetingId } = req.body;
   const userId = req.user.id;
@@ -529,22 +528,17 @@ app.post("/participants/approved", authenticateToken, asyncHandler(async (req, r
 app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => {
   try {
     const { meetingId, destination, currentLocation } = req.body;
-    const userId = req.user.id; // Assuming req.user.id is correctly populated by authenticateToken middleware
+    const userId = req.user.id;
 
-    // Validate required fields
     if (!meetingId || !destination || !currentLocation) {
       return res.status(400).json({ message: "Missing required fields: meetingId, destination, or currentLocation." });
     }
 
-    // Safely parse destination and currentLocation.
-    // Assuming express.json() middleware is used, these should already be objects.
-    // Added a check to ensure they are objects, and parse if they somehow come as strings.
     let parsedDestination, parsedCurrentLocation;
     try {
       parsedDestination = typeof destination === "string" ? JSON.parse(destination) : destination;
       parsedCurrentLocation = typeof currentLocation === "string" ? JSON.parse(currentLocation) : currentLocation;
 
-      // Basic validation for lat/lng presence
       if (
         !parsedDestination || parsedDestination.lat == null || parsedDestination.lng == null ||
         !parsedCurrentLocation || parsedCurrentLocation.lat == null || parsedCurrentLocation.lng == null
@@ -553,61 +547,49 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       }
 
     } catch (parseErr) {
-      // Catch JSON parsing errors if inputs were strings but malformed
       return res.status(400).json({ message: "Invalid location format: Could not parse JSON.", error: parseErr.message });
     }
 
-    // --- Database Update Logic ---
-    // First, try to update an existing user's location within the group.
-    // This handles the case where the meeting and user already exist.
     let group = await GroupMovement.findOneAndUpdate(
-      { meetingId, "users.userId": userId }, // Query: find document by meetingId and user within its 'users' array
+      { meetingId, "users.userId": userId },
       {
         $set: {
-          destination: parsedDestination, // Update the overall group destination
-          "users.$.current_location": parsedCurrentLocation, // Update the specific user's current location
-          "users.$.lastUpdated": new Date(), // Update last updated timestamp for the user
-          "users.$.hasMoved": true // Mark user as having moved
+          destination: parsedDestination,
+          "users.$.current_location": parsedCurrentLocation,
+          "users.$.lastUpdated": new Date(),
+          "users.$.hasMoved": true
         }
       },
-      { new: true } // Return the modified document after update
+      { new: true }
     );
 
-    // If the first update didn't find the user (either meetingId didn't exist,
-    // or meetingId existed but userId was not in its 'users' array),
-    // then we need to push the new user or create the group if it doesn't exist.
     if (!group || !group.users.some(u => u.userId.toString() === userId.toString())) {
       group = await GroupMovement.findOneAndUpdate(
-        { meetingId }, // Query: find by meetingId
+        { meetingId },
         {
-          $set: { destination: parsedDestination }, // Set the group destination
-          $push: { // Push a new user object into the 'users' array
+          $set: { destination: parsedDestination },
+          $push: {
             users: {
               userId,
               current_location: parsedCurrentLocation,
               lastUpdated: new Date(),
               hasMoved: true,
-              eta_minutes: 0 // Initial ETA, will be recalculated immediately below
+              eta_minutes: 0
             }
           }
         },
-        { new: true, upsert: true } // Return the modified/created document, create if not found
+        { new: true, upsert: true }
       );
     }
 
-    // If 'group' is still null after both attempts, something went wrong with DB operation
     if (!group) {
       return res.status(500).json({ message: "Failed to find or create group movement record." });
     }
 
-    // --- ETA Calculation Helper Functions ---
-    // Converts degrees to radians for Haversine formula
     const toRad = deg => deg * (Math.PI / 180);
 
-    // Calculates the estimated time of arrival in minutes using Haversine distance
-    // and a fixed average speed.
     const calculateETA = (from, to) => {
-      const R = 6371; // Radius of Earth in kilometers
+      const R = 6371;
       const dLat = toRad(to.lat - from.lat);
       const dLng = toRad(to.lng - from.lng);
 
@@ -615,53 +597,45 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
                 Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
                 Math.sin(dLng / 2) ** 2;
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const distanceKm = R * c; // Distance in kilometers
+      const distanceKm = R * c;
 
-      const speedKmh = 40; // Assumed average speed in km/h (e.g., car speed)
-      const timeMinutes = (distanceKm / speedKmh) * 60; // Time in minutes
+      const speedKmh = 40;
+      const timeMinutes = (distanceKm / speedKmh) * 60;
       return Math.round(timeMinutes);
     };
 
-    let maxETA = 0; // Variable to keep track of the maximum ETA among all users (not used in response)
+    let maxETA = 0;
 
-    // Iterate through all users in the group to calculate and update their ETAs in memory
     for (const user of group.users) {
-      // Ensure current_location and destination are valid before calculating ETA
       if (
         user.current_location &&
         user.current_location.lat != null &&
         user.current_location.lng != null &&
-        group.destination && // Use the destination from the 'group' object
+        group.destination &&
         group.destination.lat != null &&
         group.destination.lng != null
       ) {
         const eta = calculateETA(user.current_location, group.destination);
-        user.eta_minutes = eta; // Update ETA for the user in the in-memory 'group' object
-        maxETA = Math.max(maxETA, eta); // Update max ETA (if needed for other logic)
+        user.eta_minutes = eta;
+        maxETA = Math.max(maxETA, eta);
       } else {
-        user.eta_minutes = 0; // Set ETA to 0 if location data is incomplete
+        user.eta_minutes = 0;
       }
     }
 
-    // IMPORTANT: Save the 'group' document to persist the calculated eta_minutes back to the database.
     await group.save();
 
-    // --- Prepare Response ---
-    // Populate the 'userId' field in the 'users' array to get user names.
-    // We call populate on the 'group' object that was just updated and saved.
     const populatedGroup = await group.populate({
       path: "users.userId",
-      select: "name" // Select only the 'name' field from the User model
+      select: "name"
     });
 
-    // Check if population was successful. This is a safeguard.
     if (!populatedGroup) {
       return res.status(500).json({ message: "Failed to populate user data for group movement." });
     }
 
-    // Map the populated user data to the desired response format
     const result = populatedGroup.users
-      .filter(u => u.userId && u.userId._id && u.current_location) // Filter out users without valid userId or current_location
+      .filter(u => u.userId && u.userId._id && u.current_location)
       .map(u => ({
         _id: u.userId._id,
         name: u.userId.name,
@@ -671,14 +645,12 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
         hasMoved: u.hasMoved
       }));
 
-    // Send the successful response
     res.status(200).json({
       destination: populatedGroup.destination,
       users: result
     });
 
   } catch (err) {
-    // Catch any unexpected server errors
     console.error("Group Movement Error:", err);
     res.status(500).json({ message: "Server Error", error: err.message });
   }
