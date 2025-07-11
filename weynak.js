@@ -517,106 +517,102 @@ app.get("/meetings/user", authenticateToken, asyncHandler(async (req, res) => {
 app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => {
   try {
     const { meetingId, destination, currentLocation } = req.body;
-    const userId = req.user.id; // ID of the current logged-in user
+    const userId = req.user.id;
 
-    if (!meetingId  !destination  !currentLocation) { // تم تصحيح الأخطاء المطبعية هنا
+    if (!meetingId || !destination || !currentLocation) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
     const parsedDestination = typeof destination === "string" ? JSON.parse(destination) : destination;
     const parsedCurrentLocation = typeof currentLocation === "string" ? JSON.parse(currentLocation) : currentLocation;
 
-    // 1. تحديث موقع المستخدم داخل مجموعة الحركة
     let group = await GroupMovement.findOneAndUpdate(
       { meetingId, "users.userId": userId },
       {
         $set: {
-          "destination": parsedDestination, // تحديث الوجهة أيضاً
+          destination: parsedDestination,
           "users.$.current_location": parsedCurrentLocation,
           "users.$.lastUpdated": new Date(),
           "users.$.hasMoved": true,
         }
       },
-      { new: true } // Return the updated document
+      { new: true }
     );
 
-    // 2. لو المستخدم مش موجود جوه users array، قم بإضافته
-    if (!group  !group.users.some(u => u.userId.toString() === userId)) {
+    if (!group || !group.users.some(u => u.userId.toString() === userId)) {
       group = await GroupMovement.findOneAndUpdate(
         { meetingId },
         {
-          $set: { destination: parsedDestination }, // تأكد من تحديث الوجهة هنا أيضاً
+          $set: { destination: parsedDestination },
           $push: {
             users: {
               userId,
               current_location: parsedCurrentLocation,
               lastUpdated: new Date(),
               hasMoved: true,
-              eta_minutes: 0 // قيمة افتراضية للـ ETA
+              eta_minutes: 0
             }
           }
         },
-        { new: true, upsert: true } // Return the updated document, create if not exists
+        { new: true, upsert: true }
       );
     }
 
-    // 3. حساب ETA (دالة مساعدة)
     const toRad = deg => deg * (Math.PI / 180);
     const calculateETA = (from, to) => {
-      const R = 6371; // Radius of Earth in kilometers
+      const R = 6371;
       const dLat = toRad(to.lat - from.lat);
       const dLng = toRad(to.lng - from.lng);
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + // تم تصحيح ** 2
-                Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
-                Math.sin(dLng / 2) * Math.sin(dLng / 2); // تم تصحيح ** 2
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       const distanceKm = R * c;
-      const speedKmh = 40; // متوسط سرعة افتراضي بالكيلومتر في الساعة
+      const speedKmh = 40;
       const timeMinutes = (distanceKm / speedKmh) * 60;
       return Math.round(timeMinutes);
     };
 
-    // 4. جلب المشاركين الموافق عليهم
     const participants = await Participant.find({ meeting_id: meetingId, approved: true });
     const approvedUserIds = participants.map(p => p.user_id.toString());
 
-    // 5. جلب مستند GroupMovement بالكامل مع populated users
     const populatedGroupMovement = await GroupMovement.findOne({ meetingId }).populate({
       path: "users.userId",
-      select: "name" // <--- تصحيح: "name" بدلاً من "username"
+      select: "name"
     });
 
     if (!populatedGroupMovement) {
       return res.status(404).json({ message: 'Meeting movement data not found.' });
     }
 
-    // 6. إزالة السجلات المكررة والحصول على أحدث موقع فريد لكل مستخدم
-    const uniqueUsersMap = new Map(); // Map لتخزين أحدث سجل لكل userId
+    const uniqueUsersMap = new Map();
     for (const userEntry of populatedGroupMovement.users) {
-        const userIdString = userEntry.userId._id.toString();
-        // إذا كان السجل موجوداً بالفعل في الـ Map، قارن التواريخ واحتفظ بالأحدث
-        if (!uniqueUsersMap.has(userIdString)  (userEntry.lastUpdated && uniqueUsersMap.get(userIdString).lastUpdated && userEntry.lastUpdated > uniqueUsersMap.get(userIdString).lastUpdated)) {
-            uniqueUsersMap.set(userIdString, userEntry);
-        }
+      const userIdString = userEntry.userId._id.toString();
+      if (
+        !uniqueUsersMap.has(userIdString) ||
+        (userEntry.lastUpdated && uniqueUsersMap.get(userIdString).lastUpdated &&
+          userEntry.lastUpdated > uniqueUsersMap.get(userIdString).lastUpdated)
+      ) {
+        uniqueUsersMap.set(userIdString, userEntry);
+      }
     }
-    const uniqueAndLatestUsers = Array.from(uniqueUsersMap.values());
 
-    // 7. فلترة المستخدمين الذين تمت الموافقة عليهم فقط
-    const filteredAndApprovedUsers = uniqueAndLatestUsers.filter(u => approvedUserIds.includes(u.userId._id.toString()));
-// 8. حساب ETA لكل مستخدم (أصبح يعمل على القائمة المفلترة والفريدة)
+    const uniqueAndLatestUsers = Array.from(uniqueUsersMap.values());
+    const filteredAndApprovedUsers = uniqueAndLatestUsers.filter(u =>
+      approvedUserIds.includes(u.userId._id.toString())
+    );
+
     let finalMaxETA = 0;
     for (const user of filteredAndApprovedUsers) {
-      // تأكد أن destination.lat و destination.lng موجودين
       if (parsedDestination && parsedDestination.lat != null && parsedDestination.lng != null) {
         const eta = calculateETA(user.current_location, parsedDestination);
         user.eta_minutes = eta;
         finalMaxETA = Math.max(finalMaxETA, eta);
       } else {
-        user.eta_minutes = 0; // أو قيمة افتراضية أخرى لو الوجهة غير متاحة
+        user.eta_minutes = 0;
       }
     }
 
-    // 9. تحديث ETA في قاعدة البيانات (مهم جداً)
     const bulkOps = filteredAndApprovedUsers.map(user => ({
       updateOne: {
         filter: { meetingId, "users.userId": user.userId._id },
@@ -628,28 +624,24 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       await GroupMovement.bulkWrite(bulkOps);
     }
 
-    // 10. إرسال إشعارات بناءً على الفارق (معلق افتراضياً لمنع التكرار المفرط)
-
     for (const user of filteredAndApprovedUsers) {
       const delayToStart = finalMaxETA - user.eta_minutes;
       const message = delayToStart === 0
         ? "Start moving now to reach with the group."
-        : Start moving in ${delayToStart} minute(s) to arrive with others.;
+        : `Start moving in ${delayToStart} minute(s) to arrive with others.`;
 
       await Notification.create({
         userId: user.userId._id,
         type: "reminder",
-        title: "Meeting Reminder", // أضف عنوان للإشعار
+        title: "Meeting Reminder",
         message,
         meetingId
       });
     }
-    */
 
-    // 11. تحضير البيانات للواجهة (أصبح يعمل على القائمة النهائية بعد الفلترة وإزالة التكرار)
     const result = filteredAndApprovedUsers.map(u => ({
       _id: u.userId._id,
-      name: u.userId.name, // <--- تصحيح: "name" بدلاً من "username"
+      name: u.userId.name,
       current_location: u.current_location,
       eta_minutes: u.eta_minutes,
       last_updated: u.lastUpdated,
@@ -658,7 +650,7 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
 
     res.status(200).json({
       destination: populatedGroupMovement.destination,
-      users: result // هذه القائمة ستكون فريدة وتحتوي على جميع المستخدمين الموافق عليهم
+      users: result
     });
 
   } catch (err) {
@@ -666,6 +658,7 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 }));
+
     
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
