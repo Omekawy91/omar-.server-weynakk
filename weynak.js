@@ -587,44 +587,39 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
 
     let maxETA = 0;
     for (const user of group.users) {
-      const eta = calculateETA(user.current_location, parsedDestination);
-      user.eta_minutes = eta;
-      maxETA = Math.max(maxETA, eta);
+      if (
+        user.current_location &&
+        user.current_location.lat != null &&
+        user.current_location.lng != null &&
+        parsedDestination &&
+        parsedDestination.lat != null &&
+        parsedDestination.lng != null
+      ) {
+        const eta = calculateETA(user.current_location, parsedDestination);
+        user.eta_minutes = eta;
+        maxETA = Math.max(maxETA, eta);
+      } else {
+        user.eta_minutes = 0;
+      }
     }
 
     await group.save();
-
-  //  for (const user of group.users) {
-   //   const delayToStart = maxETA - user.eta_minutes;
-
-   //   if (delayToStart === 0) continue;
-
-  //    const message = `Start moving in ${delayToStart} minute(s) to arrive with others.`;
-
- //     await Notification.create({
-  //      userId: user.userId,
-  //      type: "reminder",
-  //      title: "Meeting Reminder",
- //       message,
-  //      meetingId,
-  //      delayMinutes: delayToStart,
-  //      status: "pending"
-  //    });
-   // }
 
     const populated = await GroupMovement.findOne({ meetingId }).populate({
       path: "users.userId",
       select: "name"
     });
 
-    const result = populated.users.map(u => ({
-      _id: u.userId._id,
-      name: u.userId.name,
-      current_location: u.current_location,
-      eta_minutes: u.eta_minutes,
-      last_updated: u.lastUpdated,
-      hasMoved: u.hasMoved
-    }));
+    const result = populated.users
+      .filter(u => u.userId && u.current_location && u.current_location.lat != null && u.current_location.lng != null)
+      .map(u => ({
+        _id: u.userId._id,
+        name: u.userId.name,
+        current_location: u.current_location,
+        eta_minutes: u.eta_minutes,
+        last_updated: u.lastUpdated,
+        hasMoved: u.hasMoved
+      }));
 
     res.status(200).json({
       destination: populated.destination,
