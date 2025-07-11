@@ -514,6 +514,18 @@ app.get("/meetings/user", authenticateToken, asyncHandler(async (req, res) => {
   res.json(meetings);
 }));
 
+app.post("/participants/approved", authenticateToken, asyncHandler(async (req, res) => {
+  const { meeting_id } = req.body;
+
+  if (!meeting_id) return res.status(400).json({ message: "Meeting ID is required" });
+
+  const participants = await Participant.find({ meeting_id, approved: true })
+    .populate("user_id", "username email");
+
+  res.status(200).json({ participants });
+}));
+
+
 app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => {
   try {
     const { meetingId, destination, currentLocation } = req.body;
@@ -526,11 +538,12 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
     const parsedDestination = typeof destination === "string" ? JSON.parse(destination) : destination;
     const parsedCurrentLocation = typeof currentLocation === "string" ? JSON.parse(currentLocation) : currentLocation;
 
+    // تحديث موقع المستخدم داخل مجموعة الحركة
     let group = await GroupMovement.findOneAndUpdate(
       { meetingId, "users.userId": userId },
       {
         $set: {
-          destination: parsedDestination,
+          "destination": parsedDestination,
           "users.$.current_location": parsedCurrentLocation,
           "users.$.lastUpdated": new Date(),
           "users.$.hasMoved": true,
@@ -539,6 +552,7 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       { new: true }
     );
 
+    // لو المستخدم مش موجود جوه users array
     if (!group || !group.users.some(u => u.userId.toString() === userId)) {
       group = await GroupMovement.findOneAndUpdate(
         { meetingId },
@@ -558,14 +572,15 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       );
     }
 
+    // حساب ETA لكل مستخدم
     const toRad = deg => deg * (Math.PI / 180);
     const calculateETA = (from, to) => {
       const R = 6371;
       const dLat = toRad(to.lat - from.lat);
       const dLng = toRad(to.lng - from.lng);
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
-        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
+                Math.sin(dLng / 2) ** 2;
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       const distanceKm = R * c;
       const speedKmh = 40;
@@ -573,79 +588,40 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       return Math.round(timeMinutes);
     };
 
-    const participants = await Participant.find({ meeting_id: meetingId, approved: true });
-    const approvedUserIds = participants.map(p => p.user_id.toString());
-
-    const populatedGroupMovement = await GroupMovement.findOne({ meetingId }).populate({
-      path: "users.userId",
-      select: "name"
-    });
-
-    if (!populatedGroupMovement) {
-      return res.status(404).json({ message: 'Meeting movement data not found.' });
+    // تحديث كل ETA + إرسال إشعار لكل مستخدم
+    let maxETA = 0;
+    for (const user of group.users) {
+      const eta = calculateETA(user.current_location, parsedDestination);
+      user.eta_minutes = eta;
+      maxETA = Math.max(maxETA, eta);
     }
 
-    const uniqueUsersMap = new Map();
-    for (const userEntry of populatedGroupMovement.users) {
-      const userIdString = userEntry.userId._id.toString();
-      if (
-        !uniqueUsersMap.has(userIdString) ||
-        (userEntry.lastUpdated && uniqueUsersMap.get(userIdString).lastUpdated &&
-          userEntry.lastUpdated > uniqueUsersMap.get(userIdString).lastUpdated)
-      ) {
-        uniqueUsersMap.set(userIdString, userEntry);
-      }
-    }
+    await group.save();
 
-    const uniqueAndLatestUsers = Array.from(uniqueUsersMap.values());
-    const filteredAndApprovedUsers = uniqueAndLatestUsers.filter(u =>
-      approvedUserIds.includes(u.userId._id.toString())
-    );
-
-    let finalMaxETA = 0;
-    for (const user of filteredAndApprovedUsers) {
-      if (parsedDestination && parsedDestination.lat != null && parsedDestination.lng != null) {
-        const eta = calculateETA(user.current_location, parsedDestination);
-        user.eta_minutes = eta;
-        finalMaxETA = Math.max(finalMaxETA, eta);
-      } else {
-        user.eta_minutes = 0;
-      }
-    }
-
-    const bulkOps = filteredAndApprovedUsers.map(user => ({
-      updateOne: {
-        filter: { meetingId, "users.userId": user.userId._id },
-        update: { "$set": { "users.$.eta_minutes": user.eta_minutes } }
-      }
-    }));
-
-    if (bulkOps.length > 0) {
-      await GroupMovement.bulkWrite(bulkOps);
-    }
-
-    for (const user of filteredAndApprovedUsers) {
-      const delayToStart = finalMaxETA - user.eta_minutes;
-
-      // ✅ لو delay = 0 معناها هو آخر واحد يتحرك، مش هيبعتله إشعار
-      if (delayToStart === 0) continue;
-
-      const message = `Start moving in ${delayToStart} minute(s) to arrive with others.`;
+    // إرسال إشعارات بناءً على فارق الوقت
+    for (const user of group.users) {
+      const delayToStart = maxETA - user.eta_minutes;
+      const message = delayToStart === 0
+        ? "Start moving now to reach with the group."
+        : `Start moving in ${delayToStart} minute(s) to arrive with others.`;
 
       await Notification.create({
-        userId: user.userId._id,
+        userId: user.userId,
         type: "reminder",
-        title: "Meeting Reminder",
         message,
-        meetingId,
-        delayMinutes: delayToStart,
-        status: "pending"
+        meetingId
       });
     }
 
-    const result = filteredAndApprovedUsers.map(u => ({
+    // تحضير البيانات للواجهة
+    const populated = await GroupMovement.findOne({ meetingId }).populate({
+      path: "users.userId",
+      select: "username"
+    });
+
+    const result = populated.users.map(u => ({
       _id: u.userId._id,
-      name: u.userId.name,
+      username: u.userId.username,
       current_location: u.current_location,
       eta_minutes: u.eta_minutes,
       last_updated: u.lastUpdated,
@@ -653,7 +629,7 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
     }));
 
     res.status(200).json({
-      destination: populatedGroupMovement.destination,
+      destination: populated.destination,
       users: result
     });
 
@@ -662,7 +638,6 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 }));
-
 
     
 const server = app.listen(port, () => {
