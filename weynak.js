@@ -544,11 +544,10 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
         !parsedDestination || parsedDestination.lat == null || parsedDestination.lng == null ||
         !parsedCurrentLocation || parsedCurrentLocation.lat == null || parsedCurrentLocation.lng == null
       ) {
-        return res.status(400).json({ message: "Invalid location format: lat or lng is missing." });
+        return res.status(400).json({ message: "Invalid location format." });
       }
-
-    } catch (parseErr) {
-      return res.status(400).json({ message: "Invalid location format: Could not parse JSON.", error: parseErr.message });
+    } catch (err) {
+      return res.status(400).json({ message: "Invalid location JSON.", error: err.message });
     }
 
     let group = await GroupMovement.findOneAndUpdate(
@@ -583,36 +582,23 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
       );
     }
 
-    if (!group) {
-      return res.status(500).json({ message: "Failed to find or create group movement record." });
-    }
-
     const toRad = deg => deg * (Math.PI / 180);
     const calculateETA = (from, to) => {
       const R = 6371;
       const dLat = toRad(to.lat - from.lat);
       const dLng = toRad(to.lng - from.lng);
       const a = Math.sin(dLat / 2) ** 2 +
-                Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
-                Math.sin(dLng / 2) ** 2;
+        Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) *
+        Math.sin(dLng / 2) ** 2;
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       const distanceKm = R * c;
       const speedKmh = 40;
-      const timeMinutes = (distanceKm / speedKmh) * 60;
-      return Math.round(timeMinutes);
+      return Math.round((distanceKm / speedKmh) * 60);
     };
 
     let maxETA = 0;
-
     for (const user of group.users) {
-      if (
-        user.current_location &&
-        user.current_location.lat != null &&
-        user.current_location.lng != null &&
-        group.destination &&
-        group.destination.lat != null &&
-        group.destination.lng != null
-      ) {
+      if (user.current_location && group.destination) {
         const eta = calculateETA(user.current_location, group.destination);
         user.eta_minutes = eta;
         maxETA = Math.max(maxETA, eta);
@@ -623,25 +609,27 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
 
     await group.save();
 
-    const populatedGroup = await group.populate({
-      path: "users.userId",
-      select: "name"
-    });
+    const approvedParticipants = await Participant.find({ meeting_id: meetingId, approved: true }).populate("user_id", "name");
+    const populatedGroup = await GroupMovement.findOne({ meetingId });
 
-    if (!populatedGroup) {
-      return res.status(500).json({ message: "Failed to populate user data for group movement." });
+    const userMap = new Map();
+    for (const user of populatedGroup.users) {
+      userMap.set(user.userId.toString(), user);
     }
 
-    const result = populatedGroup.users
-      .filter(u => u.userId && u.userId._id && u.current_location)
-      .map(u => ({
-        _id: u.userId._id,
-        name: u.userId.name,
-        current_location: u.current_location,
-        eta_minutes: u.eta_minutes,
-        last_updated: u.lastUpdated,
-        hasMoved: u.hasMoved
-      }));
+    const result = approvedParticipants.map(participant => {
+      const userIdStr = participant.user_id._id.toString();
+      const movement = userMap.get(userIdStr);
+
+      return {
+        _id: participant.user_id._id,
+        name: participant.user_id.name,
+        current_location: movement?.current_location || null,
+        eta_minutes: movement?.eta_minutes || 0,
+        last_updated: movement?.lastUpdated || null,
+        hasMoved: movement?.hasMoved || false
+      };
+    });
 
     res.status(200).json({
       destination: populatedGroup.destination,
@@ -653,7 +641,6 @@ app.post("/group-movement", authenticateToken, asyncHandler(async (req, res) => 
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 }));
-
 
 const server = app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
